@@ -1,0 +1,62 @@
+[
+  {
+    "FundId": 3,
+    "FundName": "name3",
+    "FundObjective": "obj3"
+  },
+  {
+    "FundId": 2,
+    "FundName": "string",
+    "FundObjective": "string"
+  },
+  {
+    "FundId": 2,
+    "FundName": "string",
+    "FundObjective": "string"
+  },
+  {
+    "FundId": 2,
+    "FundName": "string",
+    "FundObjective": "string"
+  },
+  {
+    "FundId": 2,
+    "FundName": "string",
+    "FundObjective": "string"
+  },
+  {
+    "FundId": 2,
+    "FundName": "string",
+    "FundObjective": "string"
+  },
+  {
+    "FundId": 2,
+    "FundName": "string",
+    "FundObjective": "string"
+  },
+  {
+    "FundId": 2,
+    "FundName": "string",
+    "FundObjective": "string"
+  },
+  {
+    "FundId": 2,
+    "FundName": "string",
+    "FundObjective": "string"
+  },
+  {
+    "FundId": 2,
+    "FundName": "string",
+    "FundObjective": "string"
+  },
+  {
+    "FundId": 2,
+    "FundName": "string",
+    "FundObjective": "string"
+  },
+  {
+    "FundId": 2,
+    "FundName": "string",
+    "FundObjective": "string"
+  }
+]
