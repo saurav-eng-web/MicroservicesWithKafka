@@ -24,7 +24,7 @@ namespace MicroservicesWithKafka.Controllers
         [HttpPost("downloadreports")]
         public async Task<IActionResult> DownloadReports([FromBody] JsonElement body)
         {
-            // ✅ PARAMETER VALIDATION
+            // PARAMETER VALIDATION
             if (!body.TryGetProperty("Type", out var typeEl) || string.IsNullOrWhiteSpace(typeEl.GetString()))
                 return BadRequest(new { statusCode = 400, message = "Type is required." });
 

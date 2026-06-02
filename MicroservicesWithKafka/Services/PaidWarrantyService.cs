@@ -20,8 +20,7 @@ namespace MicroservicesWithKafka.Services
             if (payload == null)
                 throw new ArgumentException("Payload is required");
 
-            JObject json = payload is JsonElement element
-                ? JObject.Parse(element.GetRawText())
+            JObject json = payload is JsonElement element ? JObject.Parse(element.GetRawText())
                 : JObject.FromObject(payload);
 
             string type = json["type"]?.ToString();

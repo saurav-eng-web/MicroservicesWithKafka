@@ -342,6 +342,10 @@ builder.Services.AddScoped<IPaidWarrantyService, PaidWarrantyService>();
 builder.Services.AddScoped<IClaimProcessRepositoryV1, ClaimProcessRepositoryV1>();
 builder.Services.AddScoped<IClaimProcessServiceV1, ClaimProcessServiceV1>();
 
+// finance executve service
+builder.Services.AddScoped<IAdminStatusViewRepository, AdminStatusViewRepository>();
+builder.Services.AddScoped<IAdminStatusViewService, AdminStatusViewService>();
+
 // healt check 
 builder.Services.AddHealthChecks()
     .AddCheck<HostingHealthCheck>("hosting")

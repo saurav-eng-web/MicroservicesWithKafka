@@ -34,7 +34,7 @@ namespace MicroservicesWithKafka.Services
             return await _userRepository.CreateUserAsync(user);
         }
 
-        public async Task<bool> UpdateUserAsync(User user)
+        public async Task<UpdateUserResponse> UpdateUserAsync(User user)
         {
             return await _userRepository.UpdateUserAsync(user);
         }

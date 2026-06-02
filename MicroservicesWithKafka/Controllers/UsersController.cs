@@ -18,7 +18,7 @@ namespace MicroservicesWithKafka.Controllers
     public class UsersController : ControllerBase
     {
         private readonly UserService _userService;
-        private readonly IConfiguration _config; // ✅ Added for JWT token settings
+        private readonly IConfiguration _config; // Added for JWT token settings
 
         public UsersController(UserService userService, IConfiguration config)
         {
@@ -62,27 +62,23 @@ namespace MicroservicesWithKafka.Controllers
             return CreatedAtAction(nameof(Get), new { username = createdUser.UserName }, createdUser);
         }
 
-        [HttpPut("{username}")]
-        public async Task<IActionResult> Put(string username, [FromBody] User user)
+
+        // password update
+        [HttpPut("change-password")]
+        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
         {
-            if (username != user.UserName)
+            if (string.IsNullOrWhiteSpace(request.UserName) || string.IsNullOrWhiteSpace(request.NewPassword))
             {
-                return BadRequest("Username in URL and body must match.");
+                return BadRequest("Username and NewPassword are required.");
             }
 
-            var existingUser = await _userService.GetUserByUserNameAsync(username);
-            if (existingUser == null)
+            var result = await _userService.UpdateUserAsync(new User
             {
-                return NotFound();
-            }
+                UserName = request.UserName,
+                UPassword = request.NewPassword
+            });
 
-            var result = await _userService.UpdateUserAsync(user);
-            if (!result)
-            {
-                return StatusCode(500, "An error occurred while updating the user.");
-            }
-
-            return NoContent();
+            return StatusCode(result.StatusCode, result);
         }
 
         // ✅ LOGIN API previous working  (Generates JWT Token)

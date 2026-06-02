@@ -15,7 +15,7 @@ namespace MicroservicesWithKafka.Services.Kafka
                 ?? throw new ArgumentNullException("Kafka:BootstrapServers is missing in configuration");
         }
 
-        // ✅ Topic name is now passed in per call
+        // Topic name is now passed in per call
         public async Task SendMessageAsync(string topicName, string key, string message)
         {
             var config = new ProducerConfig { BootstrapServers = _bootstrapServers };

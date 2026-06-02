@@ -41,7 +41,7 @@ public class UserRepository : IUserRepository
         return user;
     }
 
-    public async Task<bool> UpdateUserAsync(User user)
+    public async Task<UpdateUserResponse> UpdateUserAsync(User user)
     {
         using (var connection = _sqlConnectionService.GetConnection())
         {
@@ -49,25 +49,41 @@ public class UserRepository : IUserRepository
 
             using (var command = new SqlCommand("ManageUser", connection))
             {
-                command.CommandType = System.Data.CommandType.StoredProcedure;
+                command.CommandType = CommandType.StoredProcedure;
 
                 command.Parameters.AddWithValue("@Type", "update");
-                command.Parameters.AddWithValue("@Name", user.Name ?? (object)DBNull.Value);
-                command.Parameters.AddWithValue("@Address", user.Address ?? (object)DBNull.Value);
-                command.Parameters.AddWithValue("@Mobno", user.Mobno ?? (object)DBNull.Value);
-                command.Parameters.AddWithValue("@Mail_ID", user.Mail_ID ?? (object)DBNull.Value);
-                command.Parameters.AddWithValue("@UserName", user.UserName ?? (object)DBNull.Value);
-                command.Parameters.AddWithValue("@UPassword", user.UPassword ?? (object)DBNull.Value);
-                command.Parameters.AddWithValue("@RoleID", user.RoleID);
-                command.Parameters.AddWithValue("@Branch_ID", user.Branch_ID);
-                command.Parameters.AddWithValue("@Branch_can_RegisterCall", user.Branch_can_RegisterCall);
+                command.Parameters.AddWithValue("@Name", (object?)user.Name ?? DBNull.Value);
+                command.Parameters.AddWithValue("@Address", (object?)user.Address ?? DBNull.Value);
+                command.Parameters.AddWithValue("@Mobno", (object?)user.Mobno ?? DBNull.Value);
+                command.Parameters.AddWithValue("@Mail_ID", (object?)user.Mail_ID ?? DBNull.Value);
+                command.Parameters.AddWithValue("@UserName", user.UserName);
+                command.Parameters.AddWithValue("@UPassword", (object?)user.UPassword ?? DBNull.Value);
+                command.Parameters.AddWithValue("@RoleID", (object?)user.RoleID ?? DBNull.Value);
+                command.Parameters.AddWithValue("@Branch_ID", (object?)user.Branch_ID ?? DBNull.Value);
+                command.Parameters.AddWithValue("@Branch_can_RegisterCall", (object?)user.Branch_can_RegisterCall ?? DBNull.Value);
 
-                int rows = await command.ExecuteNonQueryAsync();
-                return rows > 0;
+                using (var reader = await command.ExecuteReaderAsync())
+                {
+                    if (await reader.ReadAsync())
+                    {
+                        return new UpdateUserResponse
+                        {
+                            StatusCode = reader.GetInt32(reader.GetOrdinal("StatusCode")),
+                            Message = reader.GetString(reader.GetOrdinal("Message")),
+                            UserName = reader.IsDBNull(reader.GetOrdinal("UserName"))? null: reader.GetString(reader.GetOrdinal("UserName")),
+                            Password = reader.IsDBNull(reader.GetOrdinal("UPassword"))? null: reader.GetString(reader.GetOrdinal("UPassword"))
+                        };
+                    }
+                }
             }
         }
-    }
 
+        return new UpdateUserResponse
+        {
+            StatusCode = 500,
+            Message = "Unexpected error"
+        };
+    }
     public async Task<User> GetUserByUserNameAsync(string username)
     {
         User user = null;
