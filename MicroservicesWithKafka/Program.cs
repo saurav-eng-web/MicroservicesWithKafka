@@ -346,6 +346,15 @@ builder.Services.AddScoped<IClaimProcessServiceV1, ClaimProcessServiceV1>();
 builder.Services.AddScoped<IAdminStatusViewRepository, AdminStatusViewRepository>();
 builder.Services.AddScoped<IAdminStatusViewService, AdminStatusViewService>();
 
+// munazir  ticket master new development
+builder.Services.AddScoped<ITicketRepository, TicketRepository>();
+builder.Services.AddScoped<ITicketService, TicketService>();
+
+// faizan finance claim count service
+builder.Services.AddScoped<IFinanceClaimCountRepository, FinanceClaimCountRepository>();
+builder.Services.AddScoped<IFinanceClaimCountService, FinanceClaimCountService>();
+
+
 // healt check 
 builder.Services.AddHealthChecks()
     .AddCheck<HostingHealthCheck>("hosting")
