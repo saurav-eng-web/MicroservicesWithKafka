@@ -538,7 +538,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", builder =>
     {
-        builder.WithOrigins("https://crmnew.jainaindia.com", "https://crmnra.jainaindia.com", "https://devcrmfrontend.jainaindia.com", "https://crmcore.jainaindia.com") // your frontend URLs
+        builder.WithOrigins("https://crmnew.jainaindia.com", "https://crmnra.jainaindia.com", "https://devcrmfrontend.jainaindia.com", "https://crmcore.jainaindia.com", "https://dev-crmapp.jainaindia.com") // your frontend URLs
                .AllowAnyHeader()
                .AllowAnyMethod()
                .AllowCredentials(); // safe because we specify origin  http://localhost:3000 -- https://crmcore.jainaindia.com
