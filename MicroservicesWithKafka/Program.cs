@@ -350,6 +350,10 @@ builder.Services.AddScoped<IAdminStatusViewService, AdminStatusViewService>();
 builder.Services.AddScoped<ITicketRepository, TicketRepository>();
 builder.Services.AddScoped<ITicketService, TicketService>();
 
+// TD/DOA CN distributor pickup service
+builder.Services.AddScoped<ITDDOAPickupRepository, TDDOAPickupRepository>();
+builder.Services.AddScoped<ITDDOAPickupService, TDDOAPickupService>();
+
 // faizan finance claim count service
 //builder.Services.AddScoped<IFinanceClaimCountRepository, FinanceClaimCountRepository>();
 //builder.Services.AddScoped<IFinanceClaimCountService, FinanceClaimCountService>();
