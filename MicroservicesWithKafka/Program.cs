@@ -79,7 +79,11 @@ builder.Services.Configure<FundsDatabaseSettings>(builder.Configuration.GetSecti
 // MongoDB Fund Repository and Service DI setup
 builder.Services.AddSingleton<IFundRepository, FundRepository>();
 builder.Services.AddScoped<FundService>();
-builder.Services.AddHostedService<KafkaConsumerService>();
+// Kafka consumer (set Kafka:EnableConsumer=false in local appsettings to run without a broker)
+if (builder.Configuration.GetValue("Kafka:EnableConsumer", true))
+{
+    builder.Services.AddHostedService<KafkaConsumerService>();
+}
 builder.Services.AddScoped<ICallRegisterRepository, CallRegisterRepository>();
 builder.Services.AddScoped<ICallRegisterService, CallRegisterService>();
 builder.Services.AddSingleton<MongoDBService>();
@@ -353,6 +357,10 @@ builder.Services.AddScoped<ITicketService, TicketService>();
 // TD/DOA CN distributor pickup service
 builder.Services.AddScoped<ITDDOAPickupRepository, TDDOAPickupRepository>();
 builder.Services.AddScoped<ITDDOAPickupService, TDDOAPickupService>();
+
+// logistic dispatch file upload service
+builder.Services.AddScoped<ILogisticUploadRepository, LogisticUploadRepository>();
+builder.Services.AddScoped<ILogisticUploadService, LogisticUploadService>();
 
 // faizan finance claim count service
 //builder.Services.AddScoped<IFinanceClaimCountRepository, FinanceClaimCountRepository>();
