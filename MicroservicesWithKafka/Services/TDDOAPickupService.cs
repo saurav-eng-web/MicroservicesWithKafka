@@ -1,4 +1,5 @@
 using MicroservicesWithKafka.Repository;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Text.Json;
 
@@ -7,12 +8,6 @@ namespace MicroservicesWithKafka.Services
     public class TDDOAPickupService : ITDDOAPickupService
     {
         private readonly ITDDOAPickupRepository _repo;
-
-        // Actions supported by SP_CRUD_DOTDCNDISTPICKUP
-        private static readonly string[] AllowedActions =
-        {
-            "INSERT", "DISTSELECT", "LOGSELECT"
-        };
 
         public TDDOAPickupService(ITDDOAPickupRepository repo)
         {
@@ -23,34 +18,32 @@ namespace MicroservicesWithKafka.Services
             ProcessAsync(object payload, string userId)
         {
             if (payload == null)
-                return (Enumerable.Empty<dynamic>(), 400, "Payload is required");
+                throw new ArgumentException("Payload is required");
 
             JObject json = payload is JsonElement element
                 ? JObject.Parse(element.GetRawText())
                 : JObject.FromObject(payload);
 
             // ACCEPT BOTH camelCase & PascalCase
-            string action = json["Action"]?.ToString() ?? json["action"]?.ToString();
+            string action = json["action"]?.ToString() ?? json["Action"]?.ToString();
 
             string serialNumber = json["SerialNumber"]?.ToString() ?? json["serialNumber"]?.ToString();
 
             if (string.IsNullOrWhiteSpace(action))
-                return (Enumerable.Empty<dynamic>(), 400, "Action is required");
+                throw new ArgumentException("action is required");
 
-            // SP has no ELSE branch - an unknown Action returns no result set at all
-            if (!AllowedActions.Contains(action, StringComparer.OrdinalIgnoreCase))
-                return (Enumerable.Empty<dynamic>(), 400,
-                    $"Invalid Action. Allowed values: {string.Join(", ", AllowedActions)}");
+            // SP reads the payload with JSON_VALUE, whose paths are CASE-SENSITIVE.
+            // Normalise to the exact keys the SP looks for: $.action, $.SerialNumber, $.userid
+            json["action"] = action;
 
-            if (action.Equals("INSERT", StringComparison.OrdinalIgnoreCase) &&
-                string.IsNullOrWhiteSpace(serialNumber))
-                return (Enumerable.Empty<dynamic>(), 400, "SerialNumber is required for INSERT");
+            if (!string.IsNullOrWhiteSpace(serialNumber))
+                json["SerialNumber"] = serialNumber;
+
+            json["userid"] = userId;
 
             var request = new
             {
-                SerialNumber = serialNumber,
-                Action = action,
-                userid = userId
+                payload = json.ToString(Formatting.None) // FULL JSON
             };
 
             return await _repo.ExecuteAsync(request);
