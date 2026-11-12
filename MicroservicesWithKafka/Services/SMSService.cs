@@ -25,7 +25,8 @@ namespace MicroservicesWithKafka.Services
             // Replace placeholder {ticketKey} in the template message
             var finalMessage = message.Replace("{ticketKey}", ticketKey);
 
-            string url = $"http://prpsms.co.in/API/SendMsg.aspx?uname=20181973&pass=dx96fJYw&send=GICARE&dest={mobile}&msg={Uri.EscapeDataString(finalMessage)}";
+            //string url = $"http://prpsms.co.in/API/SendMsg.aspx?uname=20181973&pass=dx96fJYw&send=GICARE&dest={mobile}&msg={Uri.EscapeDataString(finalMessage)}"; //Commented by Saurav For Changes API URL on dt: 03-Nov-2026
+            string url = $"http://api.bulksmsadmin.com/BulkSMSapi/keyApiSendSMS/SendMsg?uname=20151823&pass=@e57XaKdV&send=GICARE&dest={mobile}&msg={Uri.EscapeDataString(finalMessage)}"; //Added by Saurav For Changes API URL on dt: 03-Nov-2026
 
             string responseText = "";
             bool sent = false;
