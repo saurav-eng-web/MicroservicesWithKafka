@@ -5,7 +5,10 @@ using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
+using ClosedXML.Excel;
 
 namespace MicroservicesWithKafka.Controllers.Logistic
 {
@@ -103,5 +106,91 @@ namespace MicroservicesWithKafka.Controllers.Logistic
                 return BadRequest(new { message = error });
             return await Run(() => _service.GetTotalDispatchHeaderReportAsync(from, to), "Total Dispatch Header Report");
         }
+
+        /// <summary>
+        /// Direct Excel download of one report, like the legacy ReportLog.aspx buttons (each button streamed the SP result
+        /// as an Excel file). type: available-docket | used-docket | complete-docket | total-dispatch | total-dispatch-header.
+        /// The date range is only required for the two dispatch reports. Returns 204 when the report has no rows.
+        /// </summary>
+        [HttpGet("{type}/download")]
+        public async Task<IActionResult> Download(string type, [FromQuery] string? fromDate, [FromQuery] string? toDate)
+        {
+            string reportName;
+            Func<Task<IEnumerable<dynamic>>> query;
+
+            switch ((type ?? string.Empty).Trim().ToLowerInvariant())
+            {
+                case "available-docket":
+                    reportName = "Available Docket Report";
+                    query = _service.GetAvailableDocketReportAsync;
+                    break;
+                case "used-docket":
+                    reportName = "Used Docket Report";
+                    query = _service.GetUsedDocketReportAsync;
+                    break;
+                case "complete-docket":
+                    reportName = "Complete Docket Report";
+                    query = _service.GetCompleteDocketReportAsync;
+                    break;
+                case "total-dispatch":
+                {
+                    if (!TryGetRange(fromDate, toDate, out var from, out var to, out var error))
+                        return BadRequest(new { message = error });
+                    reportName = "Dispatch Line Report";
+                    query = () => _service.GetTotalDispatchReportAsync(from, to);
+                    break;
+                }
+                case "total-dispatch-header":
+                {
+                    if (!TryGetRange(fromDate, toDate, out var from, out var to, out var error))
+                        return BadRequest(new { message = error });
+                    reportName = "Dispatch Header Report";
+                    query = () => _service.GetTotalDispatchHeaderReportAsync(from, to);
+                    break;
+                }
+                default:
+                    return NotFound(new { message = "Unknown report type." });
+            }
+
+            try
+            {
+                var rows = (await query())
+                    .Select(r => (IDictionary<string, object>)r)
+                    .ToList();
+
+                if (rows.Count == 0)
+                    return NoContent();
+
+                var keys = rows[0].Keys.ToList();
+
+                using var workbook = new XLWorkbook();
+                var sheet = workbook.Worksheets.Add("Report");
+
+                for (int c = 0; c < keys.Count; c++)
+                {
+                    var header = sheet.Cell(1, c + 1);
+                    header.Value = keys[c];
+                    header.Style.Font.Bold = true;
+                }
+
+                // Bulk insert (the docket reports can have 100k+ rows)
+                sheet.Cell(2, 1).InsertData(rows.Select(r => keys.Select(k => ToCellValue(r[k])).ToArray()));
+                sheet.Columns(1, keys.Count).AdjustToContents(1, Math.Min(rows.Count + 1, 200));
+
+                using var stream = new MemoryStream();
+                workbook.SaveAs(stream);
+                return File(stream.ToArray(),
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    reportName + ".xlsx");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Logistic report download {Report} failed", reportName);
+                return StatusCode(500, new { message = $"Failed to generate {reportName}. Please try again or contact support." });
+            }
+        }
+
+        private static object ToCellValue(object value)
+            => value == null || value is DBNull ? string.Empty : value;
     }
 }

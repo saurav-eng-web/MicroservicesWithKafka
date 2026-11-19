@@ -1,9 +1,10 @@
+using Dapper;
 using MicroservicesWithKafka.Models.Logistic;
 using MicroservicesWithKafka.Services;
 using Microsoft.Data.SqlClient;
-using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace MicroservicesWithKafka.Repository.Logistic
@@ -12,182 +13,113 @@ namespace MicroservicesWithKafka.Repository.Logistic
     {
         private readonly SQLConnectionService _sqlConnectionService;
 
+        // Legacy SqlProceedure used CommandTimeout = 2000000 (effectively no limit). The upload SPs process the whole staging table and can
+        // take longer than the 30 s ADO.NET default, which made the upload fail with HTTP 500.
+        private const int SpTimeoutSeconds = 600;
+
         public LogisticCourierRepository(SQLConnectionService sqlConnectionService)
         {
             _sqlConnectionService = sqlConnectionService;
         }
 
+        // CourierAdd.aspx.vb Page_Init: select CourierName, CourierName1 from CourierMaster
         public async Task<IEnumerable<CourierViewModel>> GetCouriersAsync()
         {
-            var couriers = new List<CourierViewModel>();
-            using (var connection = _sqlConnectionService.GetConnection())
+            using var connection = _sqlConnectionService.GetConnection();
+            var rows = await LogisticSpRunner.RunAsync(connection, "SP_CRUD_LogisticCourier", new { Type = "get" });
+
+            return rows.Select(r => new CourierViewModel
             {
-                await connection.OpenAsync();
-                
-                // Translated exactly from CourierAdd.aspx.vb Page_Init
-                string query = "select CourierName, CourierName1 from CourierMaster";
-                
-                using (var command = new SqlCommand(query, connection))
-                {
-                    command.CommandType = CommandType.Text;
-                    using (var reader = await command.ExecuteReaderAsync())
-                    {
-                        while (await reader.ReadAsync())
-                        {
-                            couriers.Add(new CourierViewModel
-                            {
-                                CourierCode = reader["CourierName"] != DBNull.Value ? reader["CourierName"].ToString() : string.Empty,
-                                CourierName = reader["CourierName1"] != DBNull.Value ? reader["CourierName1"].ToString() : string.Empty
-                            });
-                        }
-                    }
-                }
-            }
-            return couriers;
+                CourierCode = LogisticRowHelper.Str(r, "CourierName"),
+                CourierName = LogisticRowHelper.Str(r, "CourierName1")
+            }).ToList();
         }
 
+        // CourierAdd.aspx.vb btnSave_Click exists check
         public async Task<bool> CourierExistsAsync(string courierCode)
         {
-            using (var connection = _sqlConnectionService.GetConnection())
-            {
-                await connection.OpenAsync();
-                
-                // Translated exactly from CourierAdd.aspx.vb btnSave_Click exists check
-                string query = "select count(*) from CourierMaster where CourierName=@CourierCode";
-                
-                using (var command = new SqlCommand(query, connection))
-                {
-                    command.CommandType = CommandType.Text;
-                    command.Parameters.AddWithValue("@CourierCode", courierCode);
-                    
-                    var count = (int)await command.ExecuteScalarAsync();
-                    return count > 0;
-                }
-            }
+            using var connection = _sqlConnectionService.GetConnection();
+            var rows = await LogisticSpRunner.RunAsync(connection, "SP_CRUD_LogisticCourier",
+                new { Type = "exists", CourierCode = courierCode });
+            return rows.Count > 0 && LogisticRowHelper.Int(rows[0], "Total") > 0;
         }
 
+        // CourierAdd.aspx.vb btnSave_Click insert
         public async Task<bool> AddCourierAsync(CourierViewModel courier)
         {
-            using (var connection = _sqlConnectionService.GetConnection())
-            {
-                await connection.OpenAsync();
-                
-                // Translated exactly from CourierAdd.aspx.vb btnSave_Click insert
-                string query = "insert into CourierMaster (CourierName,CourierName1) values (@CourierCode, @CourierName)";
-                
-                using (var command = new SqlCommand(query, connection))
-                {
-                    command.CommandType = CommandType.Text;
-                    command.Parameters.AddWithValue("@CourierCode", courier.CourierCode);
-                    command.Parameters.AddWithValue("@CourierName", courier.CourierName);
-                    
-                    int rows = await command.ExecuteNonQueryAsync();
-                    return rows > 0;
-                }
-            }
+            using var connection = _sqlConnectionService.GetConnection();
+            var rows = await LogisticSpRunner.RunAsync(connection, "SP_CRUD_LogisticCourier",
+                new { Type = "insert", CourierCode = courier.CourierCode, CourierName = courier.CourierName });
+            return rows.Count > 0 && LogisticRowHelper.Int(rows[0], "RowsAffected") > 0;
         }
 
-        // Translated from CourierMapping.aspx.vb MappingDownload_Click
+        // CourierMapping.aspx.vb MappingDownload_Click
         public async Task<IEnumerable<CourierMappingViewModel>> GetMappedCoursAsync()
         {
-            var result = new List<CourierMappingViewModel>();
-            using (var connection = _sqlConnectionService.GetConnection())
+            using var connection = _sqlConnectionService.GetConnection();
+            var rows = await LogisticSpRunner.RunAsync(connection, "SP_CRUD_LogisticCourier", new { Type = "mapped" },
+                commandTimeout: SpTimeoutSeconds);
+
+            return rows.Select(r => new CourierMappingViewModel
             {
-                await connection.OpenAsync();
-                string query = @"select (select CourierName from CourierMaster where CourierMaster.id=CourMapping.CourierID) CourierCode,
-                    (select CourierName from CourierMaster where CourierMaster.id=CourMapping.CourierID) CourierName,
-                    Pincode, Slab, [Priority], convert(nvarchar,Tdate,101) [Date]
-                    from CourMapping";
-                using (var command = new SqlCommand(query, connection))
-                {
-                    command.CommandType = CommandType.Text;
-                    using (var reader = await command.ExecuteReaderAsync())
-                    {
-                        while (await reader.ReadAsync())
-                        {
-                            result.Add(new CourierMappingViewModel
-                            {
-                                CourierCode = reader["CourierCode"] != DBNull.Value ? reader["CourierCode"].ToString() : string.Empty,
-                                CourierName = reader["CourierName"] != DBNull.Value ? reader["CourierName"].ToString() : string.Empty,
-                                Pincode     = reader["Pincode"]     != DBNull.Value ? reader["Pincode"].ToString()     : string.Empty,
-                                Slab        = reader["Slab"]        != DBNull.Value ? reader["Slab"].ToString()        : string.Empty,
-                                Priority    = reader["Priority"]    != DBNull.Value ? reader["Priority"].ToString()    : string.Empty,
-                                Date        = reader["Date"]        != DBNull.Value ? reader["Date"].ToString()        : string.Empty
-                            });
-                        }
-                    }
-                }
-            }
-            return result;
+                CourierCode = LogisticRowHelper.Str(r, "CourierCode"),
+                CourierName = LogisticRowHelper.Str(r, "CourierName"),
+                Pincode     = LogisticRowHelper.Str(r, "Pincode"),
+                Slab        = LogisticRowHelper.Str(r, "Slab"),
+                Priority    = LogisticRowHelper.Str(r, "Priority"),
+                Date        = LogisticRowHelper.Str(r, "Date")
+            }).ToList();
         }
 
-        // Translated from CourierMapping.aspx.vb MappingNotDownload_Click
+        // CourierMapping.aspx.vb MappingNotDownload_Click
         public async Task<IEnumerable<CourierMappingViewModel>> GetUnmappedCoursAsync()
         {
-            var result = new List<CourierMappingViewModel>();
-            using (var connection = _sqlConnectionService.GetConnection())
+            using var connection = _sqlConnectionService.GetConnection();
+            var rows = await LogisticSpRunner.RunAsync(connection, "SP_CRUD_LogisticCourier", new { Type = "unmapped" },
+                commandTimeout: SpTimeoutSeconds);
+
+            return rows.Select(r => new CourierMappingViewModel
             {
-                await connection.OpenAsync();
-                string query = @"select Courier as Couriercode, Pincode, Slab, [Priority], [Action],
-                    convert(nvarchar,Tdate,101) [Date] from CourMappingUpload where isUpdate=0";
-                using (var command = new SqlCommand(query, connection))
-                {
-                    command.CommandType = CommandType.Text;
-                    using (var reader = await command.ExecuteReaderAsync())
-                    {
-                        while (await reader.ReadAsync())
-                        {
-                            result.Add(new CourierMappingViewModel
-                            {
-                                CourierCode = reader["Couriercode"] != DBNull.Value ? reader["Couriercode"].ToString() : string.Empty,
-                                Pincode     = reader["Pincode"]     != DBNull.Value ? reader["Pincode"].ToString()     : string.Empty,
-                                Slab        = reader["Slab"]        != DBNull.Value ? reader["Slab"].ToString()        : string.Empty,
-                                Priority    = reader["Priority"]    != DBNull.Value ? reader["Priority"].ToString()    : string.Empty,
-                                Action      = reader["Action"]      != DBNull.Value ? reader["Action"].ToString()      : string.Empty,
-                                Date        = reader["Date"]        != DBNull.Value ? reader["Date"].ToString()        : string.Empty
-                            });
-                        }
-                    }
-                }
-            }
-            return result;
+                CourierCode = LogisticRowHelper.Str(r, "Couriercode"),
+                Pincode     = LogisticRowHelper.Str(r, "Pincode"),
+                Slab        = LogisticRowHelper.Str(r, "Slab"),
+                Priority    = LogisticRowHelper.Str(r, "Priority"),
+                Action      = LogisticRowHelper.Str(r, "Action"),
+                Date        = LogisticRowHelper.Str(r, "Date")
+            }).ToList();
         }
 
-        // Translated from CourierMapping.aspx.vb bindgrid — SqlBulkCopy into CourMappingUpload then call Set_CourierMapping SP
+        // CourierMapping.aspx.vb bindgrid — SqlBulkCopy into CourMappingUpload (stays ADO.NET), then the Set_CourierMapping SP
         public async Task<bool> UploadCourierMappingAsync(IEnumerable<CourierMappingUploadViewModel> rows)
         {
-            using (var connection = _sqlConnectionService.GetConnection())
+            using var connection = _sqlConnectionService.GetConnection();
+            await connection.OpenAsync();
+
+            var dt = new DataTable();
+            dt.Columns.Add("Courier",  typeof(string));
+            dt.Columns.Add("Pincode",  typeof(string));
+            dt.Columns.Add("Slab",     typeof(string));
+            dt.Columns.Add("Priority", typeof(string));
+            dt.Columns.Add("Action",   typeof(string));
+
+            foreach (var row in rows)
+                dt.Rows.Add(row.CourierCode, row.Pincode, row.Slab, row.Priority, row.Action);
+
+            using (var bulkCopy = new SqlBulkCopy(connection))
             {
-                await connection.OpenAsync();
-
-                var dt = new DataTable();
-                dt.Columns.Add("Courier",  typeof(string));
-                dt.Columns.Add("Pincode",  typeof(string));
-                dt.Columns.Add("Slab",     typeof(string));
-                dt.Columns.Add("Priority", typeof(string));
-                dt.Columns.Add("Action",   typeof(string));
-
-                foreach (var row in rows)
-                    dt.Rows.Add(row.CourierCode, row.Pincode, row.Slab, row.Priority, row.Action);
-
-                using (var bulkCopy = new Microsoft.Data.SqlClient.SqlBulkCopy(connection))
-                {
-                    bulkCopy.DestinationTableName = "CourMappingUpload";
-                    bulkCopy.ColumnMappings.Add("Courier",  "Courier");
-                    bulkCopy.ColumnMappings.Add("Pincode",  "Pincode");
-                    bulkCopy.ColumnMappings.Add("Slab",     "Slab");
-                    bulkCopy.ColumnMappings.Add("Priority", "Priority");
-                    bulkCopy.ColumnMappings.Add("Action",   "Action");
-                    await bulkCopy.WriteToServerAsync(dt);
-                }
-
-                // Call SP to process the uploaded mapping data
-                using (var command = new SqlCommand("Set_CourierMapping", connection))
-                {
-                    command.CommandType = CommandType.StoredProcedure;
-                    await command.ExecuteNonQueryAsync();
-                }
+                bulkCopy.DestinationTableName = "CourMappingUpload";
+                bulkCopy.ColumnMappings.Add("Courier",  "Courier");
+                bulkCopy.ColumnMappings.Add("Pincode",  "Pincode");
+                bulkCopy.ColumnMappings.Add("Slab",     "Slab");
+                bulkCopy.ColumnMappings.Add("Priority", "Priority");
+                bulkCopy.ColumnMappings.Add("Action",   "Action");
+                await bulkCopy.WriteToServerAsync(dt);
             }
+
+            // Process the uploaded mapping data
+            await connection.ExecuteAsync("Set_CourierMapping",
+                commandType: CommandType.StoredProcedure, commandTimeout: SpTimeoutSeconds);
+
             return true;
         }
     }
