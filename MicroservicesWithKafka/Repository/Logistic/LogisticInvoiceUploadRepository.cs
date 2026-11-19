@@ -41,9 +41,10 @@ namespace MicroservicesWithKafka.Repository.Logistic
                     await bulkCopy.WriteToServerAsync(dt);
                 }
 
-                await connection.ExecuteAsync(
-                    $"update {table} set CreatedBy = @UserName where IsProcess = 0",
-                    new { UserName = userName }, transaction);
+                // A non-200 status from the SP is raised as an exception, so the rollback below still happens
+                await LogisticSpRunner.RunAsync(connection, "SP_CRUD_LogisticInvoiceUpload",
+                    new { Type = table == "LogisticInvoicePOUploader" ? "stamppo" : "stamprate", UserName = userName },
+                    transaction);
 
                 transaction.Commit();
             }

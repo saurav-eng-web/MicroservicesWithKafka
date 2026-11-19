@@ -1,9 +1,11 @@
+using Dapper;
 using MicroservicesWithKafka.Models.Logistic;
 using MicroservicesWithKafka.Services;
 using Microsoft.Data.SqlClient;
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace MicroservicesWithKafka.Repository.Logistic
@@ -12,36 +14,16 @@ namespace MicroservicesWithKafka.Repository.Logistic
     {
         private readonly SQLConnectionService _sqlConnectionService;
 
+        // Legacy SqlProceedure used CommandTimeout = 2000000 (effectively no limit). The upload SPs process the whole staging table and can
+        // take longer than the 30 s ADO.NET default, which made the upload fail with HTTP 500.
+        private const int SpTimeoutSeconds = 600;
+
         public LogisticDocketRepository(SQLConnectionService sqlConnectionService)
         {
             _sqlConnectionService = sqlConnectionService;
         }
 
-        // ------------------------------------------------------------------
-        // Helpers
-        // ------------------------------------------------------------------
-
-        private static HashSet<string> GetColumnNames(SqlDataReader reader)
-        {
-            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            for (int i = 0; i < reader.FieldCount; i++)
-                names.Add(reader.GetName(i));
-            return names;
-        }
-
-        /// <summary>Returns the first matching column value as string, or empty when the column is absent/NULL.</summary>
-        private static string ReadString(SqlDataReader reader, HashSet<string> columns, params string[] candidates)
-        {
-            foreach (var name in candidates)
-            {
-                if (columns.Contains(name))
-                {
-                    var value = reader[name];
-                    return value == DBNull.Value ? string.Empty : value.ToString() ?? string.Empty;
-                }
-            }
-            return string.Empty;
-        }
+        private static string S(IDictionary<string, object?> row, params string[] names) => LogisticRowHelper.Str(row, names);
 
         // ------------------------------------------------------------------
         // Delete Docket (DeleteDocket.aspx.vb)
@@ -52,62 +34,37 @@ namespace MicroservicesWithKafka.Repository.Logistic
         // fixed in code. Columns are read defensively so a missing column never throws.
         public async Task<IEnumerable<DocketViewModel>> GetDocketsAsync(string search)
         {
-            var dockets = new List<DocketViewModel>();
+            // Legacy BindGrid() did not send @Search at all when the textbox was empty.
+            var parameters = new DynamicParameters();
+            parameters.Add("Action", "SELECT");
+            if (!string.IsNullOrWhiteSpace(search))
+                parameters.Add("Search", search.Trim());
 
-            using (var connection = _sqlConnectionService.GetConnection())
+            using var connection = _sqlConnectionService.GetConnection();
+            var rows = await connection.QueryAsync("DocMaster_Proc", parameters, commandType: CommandType.StoredProcedure);
+
+            return LogisticRowHelper.ToRows(rows).Select(r => new DocketViewModel
             {
-                await connection.OpenAsync();
-
-                using (var command = new SqlCommand("DocMaster_Proc", connection))
-                {
-                    command.CommandType = CommandType.StoredProcedure;
-                    command.Parameters.AddWithValue("@Action", "SELECT");
-                    // Legacy BindGrid() did not send @Search at all when the textbox was empty.
-                    if (!string.IsNullOrWhiteSpace(search))
-                        command.Parameters.AddWithValue("@Search", search.Trim());
-
-                    using (var reader = await command.ExecuteReaderAsync())
-                    {
-                        var cols = GetColumnNames(reader);
-                        while (await reader.ReadAsync())
-                        {
-                            var idText = ReadString(reader, cols, "id");
-                            dockets.Add(new DocketViewModel
-                            {
-                                Id           = int.TryParse(idText, out var id) ? id : (int?)null,
-                                ChallanNo    = ReadString(reader, cols, "ChallanNo"),
-                                CourierCode  = ReadString(reader, cols, "CourierCode", "Courier", "CourierName"),
-                                DocketNo     = ReadString(reader, cols, "DocketNo", "Docket"),
-                                Type         = ReadString(reader, cols, "Type", "InventoryType"),
-                                PickupDate   = ReadString(reader, cols, "PickupDate", "Tdate", "Date"),
-                                DeliveryDate = ReadString(reader, cols, "DeliveryDate"),
-                                DocStatus    = ReadString(reader, cols, "DocStatus", "IsUsed", "Status")
-                            });
-                        }
-                    }
-                }
-            }
-
-            return dockets;
+                Id           = int.TryParse(S(r, "id"), out var id) ? id : (int?)null,
+                ChallanNo    = S(r, "ChallanNo"),
+                // DocMaster_Proc SELECT returns exactly [ID], [Courier Name], [Docket No]
+                // ("Courier Name" is CourierMaster.CourierName, i.e. the courier code).
+                CourierCode  = S(r, "Courier Name", "CourierCode", "Courier", "CourierName"),
+                DocketNo     = S(r, "Docket No", "DocketNo", "Docket"),
+                Type         = S(r, "Type", "InventoryType"),
+                PickupDate   = S(r, "PickupDate", "Tdate", "Date"),
+                DeliveryDate = S(r, "DeliveryDate"),
+                DocStatus    = S(r, "DocStatus", "IsUsed", "Status")
+            }).ToList();
         }
 
         // Legacy: DocMaster_Proc @Action='DELETE', @CustomerId=<grid id>. The legacy page ignored the
-        // affected-row count and simply re-bound the grid, so success = the SP ran without error
-        // (ExecuteNonQuery returns -1 when the SP uses SET NOCOUNT ON).
+        // affected-row count and simply re-bound the grid, so success = the SP ran without error.
         public async Task<bool> DeleteDocketAsync(int id)
         {
-            using (var connection = _sqlConnectionService.GetConnection())
-            {
-                await connection.OpenAsync();
-
-                using (var command = new SqlCommand("DocMaster_Proc", connection))
-                {
-                    command.CommandType = CommandType.StoredProcedure;
-                    command.Parameters.AddWithValue("@Action", "DELETE");
-                    command.Parameters.AddWithValue("@CustomerId", id);
-                    await command.ExecuteNonQueryAsync();
-                }
-            }
+            using var connection = _sqlConnectionService.GetConnection();
+            await connection.ExecuteAsync("DocMaster_Proc", new { Action = "DELETE", CustomerId = id },
+                commandType: CommandType.StoredProcedure);
             return true;
         }
 
@@ -117,79 +74,66 @@ namespace MicroservicesWithKafka.Repository.Logistic
 
         // Legacy History.aspx.vb: sp_DocketDetails(@Type=<display name>, @PONo) -> Tables(0) header only.
         public Task<DocketDetailViewModel?> GetDocketDetailAsync(string type, string challanNo)
-            => GetDocketHeaderWithHistoryAsync("sp_DocketDetails", type, challanNo);
+            => GetDocketHeaderWithHistoryAsync("sp_DocketDetails", type, challanNo, allowEmptyHeader: true);
 
         // Legacy SearchHistory.aspx.vb: sp_DocketDetailsSearch(@Type=<dropdown text>, @PONo) -> Tables(0).
         public Task<DocketDetailViewModel?> SearchDocketAsync(string type, string challanNo)
-            => GetDocketHeaderWithHistoryAsync("sp_DocketDetailsSearch", type, challanNo);
+            => GetDocketHeaderWithHistoryAsync("sp_DocketDetailsSearch", type, challanNo, allowEmptyHeader: false);
 
         /// <summary>
         /// Reads the header row from the given SP, then (as in legacy) loads the history grid
-        /// from PickUPhistory with a separate query. Returns null when the SP returns no row
+        /// from PickUPhistory (SP_CRUD_LogisticDocket HISTORY). Returns null when the SP returns no row
         /// (legacy showed "No result found").
         /// </summary>
-        private async Task<DocketDetailViewModel?> GetDocketHeaderWithHistoryAsync(string spName, string type, string challanNo)
+        /// <param name="allowEmptyHeader">
+        /// History.aspx always loaded the PickUPhistory grid even when sp_DocketDetails returned no header row,
+        /// so History passes true (null is returned only when there is no header AND no history rows).
+        /// SearchHistory.aspx exited early with "No result found" when the SP returned no row, so Search passes false.
+        /// </param>
+        private async Task<DocketDetailViewModel?> GetDocketHeaderWithHistoryAsync(string spName, string type, string challanNo, bool allowEmptyHeader)
         {
-            DocketDetailViewModel? detail = null;
+            using var connection = _sqlConnectionService.GetConnection();
 
-            using (var connection = _sqlConnectionService.GetConnection())
+            var headerRows = await connection.QueryAsync(spName, new { Type = type, PONo = challanNo },
+                commandType: CommandType.StoredProcedure);
+            var header = LogisticRowHelper.ToRows(headerRows).FirstOrDefault();
+
+            bool headerFound = header != null;
+            if (!headerFound && !allowEmptyHeader)
+                return null;
+
+            var detail = headerFound
+                ? new DocketDetailViewModel
+                {
+                    ChallanNo     = S(header!, "ChallanNo"),
+                    Docket        = S(header!, "Docket"),
+                    Courier       = S(header!, "Courier"),
+                    TypeOfChallan = S(header!, "TypeOfChallan"),
+                    CourierWeight = S(header!, "CourierWeight"),
+                    Dimensions    = S(header!, "Dimensions"),
+                    PickupBoy     = S(header!, "PickupBoy"),
+                    PickupMobile  = S(header!, "PickupMobile"),
+                    DocketStatus  = S(header!, "DocketStatus"),
+                    PickupRemark  = S(header!, "PickupRemark")
+                }
+                : new DocketDetailViewModel { ChallanNo = challanNo };
+
+            // Legacy: select PStatus,Remark,convert(nvarchar,tdate,101) As Tdate from PickUPhistory where ChallanNo='...'
+            var historyRows = await LogisticSpRunner.RunAsync(connection, "SP_CRUD_LogisticDocket",
+                new { Type = "history", ChallanNo = challanNo });
+            foreach (var h in historyRows)
             {
-                await connection.OpenAsync();
-
-                using (var command = new SqlCommand(spName, connection))
+                detail.History.Add(new DocketHistoryViewModel
                 {
-                    command.CommandType = CommandType.StoredProcedure;
-                    command.Parameters.AddWithValue("@Type", type);
-                    command.Parameters.AddWithValue("@PONo", challanNo);
-
-                    using (var reader = await command.ExecuteReaderAsync())
-                    {
-                        var cols = GetColumnNames(reader);
-                        if (await reader.ReadAsync())
-                        {
-                            detail = new DocketDetailViewModel
-                            {
-                                ChallanNo     = ReadString(reader, cols, "ChallanNo"),
-                                Docket        = ReadString(reader, cols, "Docket"),
-                                Courier       = ReadString(reader, cols, "Courier"),
-                                TypeOfChallan = ReadString(reader, cols, "TypeOfChallan"),
-                                CourierWeight = ReadString(reader, cols, "CourierWeight"),
-                                Dimensions    = ReadString(reader, cols, "Dimensions"),
-                                PickupBoy     = ReadString(reader, cols, "PickupBoy"),
-                                PickupMobile  = ReadString(reader, cols, "PickupMobile"),
-                                DocketStatus  = ReadString(reader, cols, "DocketStatus"),
-                                PickupRemark  = ReadString(reader, cols, "PickupRemark")
-                            };
-                        }
-                    }
-                }
-
-                if (detail == null)
-                    return null;
-
-                // Legacy: select PStatus,Remark,convert(nvarchar,tdate,101) As Tdate from PickUPhistory where ChallanNo='...'
-                const string historyQuery =
-                    "select PStatus, Remark, convert(nvarchar, tdate, 101) as Tdate from PickUPhistory where ChallanNo = @ChallanNo";
-
-                using (var command = new SqlCommand(historyQuery, connection))
-                {
-                    command.CommandType = CommandType.Text;
-                    command.Parameters.AddWithValue("@ChallanNo", challanNo);
-
-                    using (var reader = await command.ExecuteReaderAsync())
-                    {
-                        while (await reader.ReadAsync())
-                        {
-                            detail.History.Add(new DocketHistoryViewModel
-                            {
-                                PStatus = reader["PStatus"] != DBNull.Value ? reader["PStatus"].ToString() : string.Empty,
-                                Remark  = reader["Remark"]  != DBNull.Value ? reader["Remark"].ToString()  : string.Empty,
-                                Tdate   = reader["Tdate"]   != DBNull.Value ? reader["Tdate"].ToString()   : string.Empty
-                            });
-                        }
-                    }
-                }
+                    PStatus = S(h, "PStatus"),
+                    Remark  = S(h, "Remark"),
+                    Tdate   = S(h, "Tdate")
+                });
             }
+
+            // No header and no history rows: nothing to show ("No result found").
+            if (!headerFound && detail.History.Count == 0)
+                return null;
 
             return detail;
         }
@@ -218,47 +162,39 @@ namespace MicroservicesWithKafka.Repository.Logistic
                     row.Type?.Trim()        ?? string.Empty);
             }
 
-            using (var connection = _sqlConnectionService.GetConnection())
+            using var connection = _sqlConnectionService.GetConnection();
+            await connection.OpenAsync();
+
+            // Bulk copy + user stamp are atomic; the SP runs afterwards exactly as in legacy.
+            using (var transaction = connection.BeginTransaction())
             {
-                await connection.OpenAsync();
-
-                // Bulk copy + user stamp are atomic; the SP runs afterwards exactly as in legacy.
-                using (var transaction = connection.BeginTransaction())
+                try
                 {
-                    try
+                    using (var bulkCopy = new SqlBulkCopy(connection, SqlBulkCopyOptions.Default, transaction))
                     {
-                        using (var bulkCopy = new SqlBulkCopy(connection, SqlBulkCopyOptions.Default, transaction))
-                        {
-                            bulkCopy.DestinationTableName = "DocketChange";
-                            bulkCopy.ColumnMappings.Add("ChallanNo",   "ChallanNo");
-                            bulkCopy.ColumnMappings.Add("CourierCode", "CourierCode");
-                            bulkCopy.ColumnMappings.Add("DocketNo",    "DocketNo");
-                            bulkCopy.ColumnMappings.Add("Type",        "Type");
-                            await bulkCopy.WriteToServerAsync(dt);
-                        }
-
-                        using (var stamp = new SqlCommand("update DocketChange set Userid = @UserId where IsUpdate = 0", connection, transaction))
-                        {
-                            stamp.CommandType = CommandType.Text;
-                            stamp.Parameters.AddWithValue("@UserId", userId);
-                            await stamp.ExecuteNonQueryAsync();
-                        }
-
-                        transaction.Commit();
+                        bulkCopy.DestinationTableName = "DocketChange";
+                        bulkCopy.ColumnMappings.Add("ChallanNo",   "ChallanNo");
+                        bulkCopy.ColumnMappings.Add("CourierCode", "CourierCode");
+                        bulkCopy.ColumnMappings.Add("DocketNo",    "DocketNo");
+                        bulkCopy.ColumnMappings.Add("Type",        "Type");
+                        await bulkCopy.WriteToServerAsync(dt);
                     }
-                    catch
-                    {
-                        transaction.Rollback();
-                        throw;
-                    }
+
+                    // A non-200 status from the SP is raised as an exception, so the rollback below still happens
+                    await LogisticSpRunner.RunAsync(connection, "SP_CRUD_LogisticDocket",
+                        new { Type = "stampuser", UserId = userId }, transaction);
+
+                    transaction.Commit();
                 }
-
-                using (var command = new SqlCommand("Set_updateDocketChange", connection))
+                catch
                 {
-                    command.CommandType = CommandType.StoredProcedure;
-                    await command.ExecuteNonQueryAsync();
+                    transaction.Rollback();
+                    throw;
                 }
             }
+
+            await connection.ExecuteAsync("Set_updateDocketChange",
+                commandType: CommandType.StoredProcedure, commandTimeout: SpTimeoutSeconds);
 
             return dt.Rows.Count;
         }
@@ -289,27 +225,22 @@ namespace MicroservicesWithKafka.Repository.Logistic
                     row.DocStatus?.Trim() ?? string.Empty);
             }
 
-            using (var connection = _sqlConnectionService.GetConnection())
+            using var connection = _sqlConnectionService.GetConnection();
+            await connection.OpenAsync();
+
+            using (var bulkCopy = new SqlBulkCopy(connection))
             {
-                await connection.OpenAsync();
-
-                using (var bulkCopy = new SqlBulkCopy(connection))
-                {
-                    bulkCopy.DestinationTableName = "DocketChangeStatus";
-                    bulkCopy.ColumnMappings.Add("ChallanNo",    "ChallanNo");
-                    bulkCopy.ColumnMappings.Add("Type",         "Type");
-                    bulkCopy.ColumnMappings.Add("PickupDate",   "PickupDate");
-                    bulkCopy.ColumnMappings.Add("DeliveryDate", "DeliveryDate");
-                    bulkCopy.ColumnMappings.Add("DocStatus",    "DocStatus");
-                    await bulkCopy.WriteToServerAsync(dt);
-                }
-
-                using (var command = new SqlCommand("Set_updateDocketChangeStatus", connection))
-                {
-                    command.CommandType = CommandType.StoredProcedure;
-                    await command.ExecuteNonQueryAsync();
-                }
+                bulkCopy.DestinationTableName = "DocketChangeStatus";
+                bulkCopy.ColumnMappings.Add("ChallanNo",    "ChallanNo");
+                bulkCopy.ColumnMappings.Add("Type",         "Type");
+                bulkCopy.ColumnMappings.Add("PickupDate",   "PickupDate");
+                bulkCopy.ColumnMappings.Add("DeliveryDate", "DeliveryDate");
+                bulkCopy.ColumnMappings.Add("DocStatus",    "DocStatus");
+                await bulkCopy.WriteToServerAsync(dt);
             }
+
+            await connection.ExecuteAsync("Set_updateDocketChangeStatus",
+                commandType: CommandType.StoredProcedure, commandTimeout: SpTimeoutSeconds);
 
             return dt.Rows.Count;
         }
@@ -349,63 +280,35 @@ namespace MicroservicesWithKafka.Repository.Logistic
         // Legacy DownloadDocket_Click
         public async Task<IEnumerable<DocketDownloadViewModel>> GetDocketDownloadsAsync()
         {
-            var result = new List<DocketDownloadViewModel>();
-            using (var connection = _sqlConnectionService.GetConnection())
-            {
-                await connection.OpenAsync();
-                const string query = "select (select CourierName from CourierMaster where CourierMaster.id=DocMaster.Courierid) CourierCode,(select CourierName1 from CourierMaster where CourierMaster.id=DocMaster.Courierid) Courier,DocketNo,IsUsed,InventoryType,convert(nvarchar,Tdate,101) [Date] from DocMaster";
+            using var connection = _sqlConnectionService.GetConnection();
+            var rows = await LogisticSpRunner.RunAsync(connection, "SP_CRUD_LogisticDocket", new { Type = "download" },
+                commandTimeout: SpTimeoutSeconds);
 
-                using (var command = new SqlCommand(query, connection))
-                {
-                    command.CommandType = CommandType.Text;
-                    using (var reader = await command.ExecuteReaderAsync())
-                    {
-                        while (await reader.ReadAsync())
-                        {
-                            result.Add(new DocketDownloadViewModel
-                            {
-                                CourierCode   = reader["CourierCode"]   != DBNull.Value ? reader["CourierCode"].ToString()!   : string.Empty,
-                                Courier       = reader["Courier"]       != DBNull.Value ? reader["Courier"].ToString()!       : string.Empty,
-                                DocketNo      = reader["DocketNo"]      != DBNull.Value ? reader["DocketNo"].ToString()!      : string.Empty,
-                                IsUsed        = reader["IsUsed"]        != DBNull.Value ? reader["IsUsed"].ToString()!        : string.Empty,
-                                InventoryType = reader["InventoryType"] != DBNull.Value ? reader["InventoryType"].ToString()! : string.Empty,
-                                Date          = reader["Date"]          != DBNull.Value ? reader["Date"].ToString()!          : string.Empty
-                            });
-                        }
-                    }
-                }
-            }
-            return result;
+            return rows.Select(r => new DocketDownloadViewModel
+            {
+                CourierCode   = S(r, "CourierCode"),
+                Courier       = S(r, "Courier"),
+                DocketNo      = S(r, "DocketNo"),
+                IsUsed        = S(r, "IsUsed"),
+                InventoryType = S(r, "InventoryType"),
+                Date          = S(r, "Date")
+            }).ToList();
         }
 
         // Legacy DocketNot_Click
         public async Task<IEnumerable<DocketNotUploadedViewModel>> GetDocketsNotUploadedAsync()
         {
-            var result = new List<DocketNotUploadedViewModel>();
-            using (var connection = _sqlConnectionService.GetConnection())
-            {
-                await connection.OpenAsync();
-                const string query = "select Courier as CourierCode,DocketNo,Isupload,CONVERT(nvarchar,Tdate,101) [Date] from DocMasterUpload where Isupload=0";
+            using var connection = _sqlConnectionService.GetConnection();
+            var rows = await LogisticSpRunner.RunAsync(connection, "SP_CRUD_LogisticDocket", new { Type = "notuploaded" },
+                commandTimeout: SpTimeoutSeconds);
 
-                using (var command = new SqlCommand(query, connection))
-                {
-                    command.CommandType = CommandType.Text;
-                    using (var reader = await command.ExecuteReaderAsync())
-                    {
-                        while (await reader.ReadAsync())
-                        {
-                            result.Add(new DocketNotUploadedViewModel
-                            {
-                                CourierCode = reader["CourierCode"] != DBNull.Value ? reader["CourierCode"].ToString()! : string.Empty,
-                                DocketNo    = reader["DocketNo"]    != DBNull.Value ? reader["DocketNo"].ToString()!    : string.Empty,
-                                IsUpload    = reader["Isupload"]    != DBNull.Value ? reader["Isupload"].ToString()!    : string.Empty,
-                                Date        = reader["Date"]        != DBNull.Value ? reader["Date"].ToString()!        : string.Empty
-                            });
-                        }
-                    }
-                }
-            }
-            return result;
+            return rows.Select(r => new DocketNotUploadedViewModel
+            {
+                CourierCode = S(r, "CourierCode"),
+                DocketNo    = S(r, "DocketNo"),
+                IsUpload    = S(r, "Isupload"),
+                Date        = S(r, "Date")
+            }).ToList();
         }
 
         // Legacy bindgrid: Excel(CourierCode, DocketNo) -> DocMasterUpload(Courier, DocketNo) -> Set_updateDocketData
@@ -418,24 +321,20 @@ namespace MicroservicesWithKafka.Repository.Logistic
             foreach (var row in rows)
                 dt.Rows.Add(row.CourierCode?.Trim() ?? string.Empty, row.DocketNo?.Trim() ?? string.Empty);
 
-            using (var connection = _sqlConnectionService.GetConnection())
+            using var connection = _sqlConnectionService.GetConnection();
+            await connection.OpenAsync();
+
+            using (var bulkCopy = new SqlBulkCopy(connection))
             {
-                await connection.OpenAsync();
-
-                using (var bulkCopy = new SqlBulkCopy(connection))
-                {
-                    bulkCopy.DestinationTableName = "DocMasterUpload";
-                    bulkCopy.ColumnMappings.Add("Courier",  "Courier");
-                    bulkCopy.ColumnMappings.Add("DocketNo", "DocketNo");
-                    await bulkCopy.WriteToServerAsync(dt);
-                }
-
-                using (var command = new SqlCommand("Set_updateDocketData", connection))
-                {
-                    command.CommandType = CommandType.StoredProcedure;
-                    await command.ExecuteNonQueryAsync();
-                }
+                bulkCopy.DestinationTableName = "DocMasterUpload";
+                bulkCopy.ColumnMappings.Add("Courier",  "Courier");
+                bulkCopy.ColumnMappings.Add("DocketNo", "DocketNo");
+                await bulkCopy.WriteToServerAsync(dt);
             }
+
+            await connection.ExecuteAsync("Set_updateDocketData",
+                commandType: CommandType.StoredProcedure, commandTimeout: SpTimeoutSeconds);
+
             return dt.Rows.Count;
         }
     }
