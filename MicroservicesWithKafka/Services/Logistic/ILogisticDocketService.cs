@@ -18,6 +18,10 @@ namespace MicroservicesWithKafka.Services.Logistic
         Task<(bool Success, string Message)> UploadDocketChangeAsync(IEnumerable<DocketViewModel> rows, string userId);
         Task<(bool Success, string Message)> UploadDocketChangeStatusAsync(IEnumerable<DocketViewModel> rows);
 
+        /// <summary>Forward Logistic Docket Uploader. NotApplied = rows that changed nothing (challan / docket not found, bad status).</summary>
+        Task<(bool Success, string Message, IReadOnlyList<ForwardDocketNotAppliedViewModel> NotApplied)> UploadForwardDocketsAsync(
+            IEnumerable<ForwardDocketUploadViewModel> rows, string userName);
+
         Task<IEnumerable<DocketDownloadViewModel>> GetDocketDownloadsAsync();
         Task<IEnumerable<DocketNotUploadedViewModel>> GetDocketsNotUploadedAsync();
         Task<(bool Success, string Message)> UploadDocketsAsync(IEnumerable<DocketUploadRequestViewModel> rows);

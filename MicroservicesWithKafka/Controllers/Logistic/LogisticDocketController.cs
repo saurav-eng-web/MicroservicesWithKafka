@@ -155,6 +155,30 @@ namespace MicroservicesWithKafka.Controllers.Logistic
         }
 
         /// <summary>
+        /// Forward Logistic Docket Uploader: rows (ChallanNo, DocketNo, DocStatus, TransDate, UploadType, ChallanType).
+        /// Bulk copy into challdocketstusuploder, then SP_CRUD_LogisticForwardDocket updates tbl_PORecieveHistory
+        /// (In-Transit -> Docket_transit_Date, Delivered -> Docket_Delivery_date). A future TransDate is rejected.
+        /// </summary>
+        [HttpPost("upload/forward")]
+        public async Task<IActionResult> UploadForwardDockets([FromBody] List<ForwardDocketUploadViewModel> rows)
+        {
+            if (rows == null || rows.Count == 0)
+                return BadRequest(new { message = "No rows provided." });
+
+            // CreatedBy of the staging table is the login user NAME (the JWT "username" claim), not the numeric user id
+            var userName = User.FindFirst("username")?.Value ?? User.Identity?.Name ?? string.Empty;
+
+            try
+            {
+                var result = await _service.UploadForwardDocketsAsync(rows, userName);
+                if (result.Success)
+                    return Ok(new { message = result.Message, notApplied = result.NotApplied });
+                return BadRequest(new { message = result.Message });
+            }
+            catch (Exception ex) { return ServerError(ex, "upload forward docket data"); }
+        }
+
+        /// <summary>
         /// All dockets (DocMaster) for export.
         /// Replaces DocketUpload.aspx.vb DownloadDocket_Click.
         /// </summary>

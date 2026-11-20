@@ -18,6 +18,9 @@ namespace MicroservicesWithKafka.Repository.Logistic
         Task<int> UploadDocketChangeAsync(IEnumerable<DocketViewModel> rows, string userId);
         Task<int> UploadDocketChangeStatusAsync(IEnumerable<DocketViewModel> rows);
 
+        // Forward Logistic Docket Uploader: bulk copy into challdocketstusuploder +SP_CRUD_LogisticForwardDocket (one transaction)
+        Task<ForwardDocketUploadResult> UploadForwardDocketsAsync(IEnumerable<ForwardDocketRow> rows, string userName);
+
         // DocketUpload.aspx.vb DownloadDocket_Click
         Task<IEnumerable<DocketDownloadViewModel>> GetDocketDownloadsAsync();
 

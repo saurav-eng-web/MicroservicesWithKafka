@@ -73,8 +73,11 @@ namespace MicroservicesWithKafka.Repository.Logistic
         // ------------------------------------------------------------------
 
         // Legacy History.aspx.vb: sp_DocketDetails(@Type=<display name>, @PONo) -> Tables(0) header only.
+        // sp_DocketDetails only returns challans whose DocketStatus is 'Dispatched', so In-Transit / Pickup Awaited challans
+        // (now listed by Status View) came back with an empty header. sp_DocketDetailsSearch has the same columns for every
+        // docket status, so the history header uses it.
         public Task<DocketDetailViewModel?> GetDocketDetailAsync(string type, string challanNo)
-            => GetDocketHeaderWithHistoryAsync("sp_DocketDetails", type, challanNo, allowEmptyHeader: true);
+            => GetDocketHeaderWithHistoryAsync("sp_DocketDetailsSearch", type, challanNo, allowEmptyHeader: true);
 
         // Legacy SearchHistory.aspx.vb: sp_DocketDetailsSearch(@Type=<dropdown text>, @PONo) -> Tables(0).
         public Task<DocketDetailViewModel?> SearchDocketAsync(string type, string challanNo)
@@ -309,6 +312,66 @@ namespace MicroservicesWithKafka.Repository.Logistic
                 IsUpload    = S(r, "Isupload"),
                 Date        = S(r, "Date")
             }).ToList();
+        }
+
+        // ------------------------------------------------------------------
+        // Forward Logistic Docket Uploader
+        // ------------------------------------------------------------------
+
+        // The Excel rows go into challdocketstusuploder (IsProcess = 0, CreatedBy = login user name) and SP_CRUD_LogisticForwardDocket then updates
+        // tbl_PORecieveHistory (In-Transit -> Docket_transit_Date, Delivered -> Docket_Delivery_date). Everything runs in ONE transaction:
+        // if the SP fails (e.g. a future Trans_Date) the staged rows are rolled back too, so nothing is left half done.
+        public async Task<ForwardDocketUploadResult> UploadForwardDocketsAsync(IEnumerable<ForwardDocketRow> rows, string userName)
+        {
+            var dt = new DataTable();
+            dt.Columns.Add("Challa_No",    typeof(string));
+            dt.Columns.Add("Docket_No",    typeof(string));
+            dt.Columns.Add("DOC_status",   typeof(string));
+            dt.Columns.Add("Trans_Date",   typeof(DateTime));
+            dt.Columns.Add("Upload_Type",  typeof(string));
+            dt.Columns.Add("Challan_Type", typeof(string));
+            dt.Columns.Add("CreatedBy",    typeof(string));
+
+            foreach (var row in rows)
+                dt.Rows.Add(row.ChallanNo, row.DocketNo, row.DocStatus, row.TransDate, row.UploadType, row.ChallanType, userName);
+
+            using var connection = _sqlConnectionService.GetConnection();
+            await connection.OpenAsync();
+
+            using var transaction = connection.BeginTransaction();
+            try
+            {
+                using (var bulkCopy = new SqlBulkCopy(connection, SqlBulkCopyOptions.Default, transaction))
+                {
+                    bulkCopy.DestinationTableName = "challdocketstusuploder";
+                    bulkCopy.BulkCopyTimeout = SpTimeoutSeconds;
+                    foreach (DataColumn column in dt.Columns)
+                        bulkCopy.ColumnMappings.Add(column.ColumnName, column.ColumnName); // IsProcess (0) and TDate (getdate()) use the table defaults
+                    await bulkCopy.WriteToServerAsync(dt);
+                }
+
+                var notApplied = await LogisticSpRunner.RunAsync(connection, "SP_CRUD_LogisticForwardDocket",
+                    new { Type = "process", UserId = userName }, transaction, SpTimeoutSeconds);
+
+                transaction.Commit();
+
+                return new ForwardDocketUploadResult
+                {
+                    Uploaded = dt.Rows.Count,
+                    NotApplied = notApplied.Select(r => new ForwardDocketNotAppliedViewModel
+                    {
+                        ChallanNo = S(r, "ChallanNo"),
+                        DocketNo  = S(r, "DocketNo"),
+                        DocStatus = S(r, "DocStatus"),
+                        Reason    = S(r, "Reason")
+                    }).ToList()
+                };
+            }
+            catch
+            {
+                transaction.Rollback();
+                throw;
+            }
         }
 
         // Legacy bindgrid: Excel(CourierCode, DocketNo) -> DocMasterUpload(Courier, DocketNo) -> Set_updateDocketData
