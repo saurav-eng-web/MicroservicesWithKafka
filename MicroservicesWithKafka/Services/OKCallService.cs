@@ -132,7 +132,6 @@ namespace MicroservicesWithKafka.Services
 
                 var feedbackId = ticketNo.Length > 10 ? ticketNo.Substring(10) : ticketNo;
                 var message = $"Dear Customer, Your request {ticketNo} has been resolved. Hope you are satisfied with our services. Please provide your valuable feedback at http://feedback.sansuiworld.com:59/CustomerFeedback.aspx?j={feedbackId} . For further assistance, please call 18004193777. Jaina India";
-
                 try
                 {
                     await _smsService.SendSMSAsync(message, mobile, ticketNo, "Call OK");
