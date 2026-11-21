@@ -90,6 +90,20 @@ namespace MicroservicesWithKafka.Services
             return updatedComplaints;
         }
 
+        // Added by Saurav on dt: 21-Nov-2026 - tickets for which the "Call OK" SMS was already sent (ticket -> time). Entries older than 24h are dropped.
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, DateTime> _callOkSmsSent = new();
+
+        // Returns true only for the first call per ticket (thread-safe); false if the SMS was already sent for it.
+        private static bool TryMarkCallOkSmsSent(string ticketNo)
+        {
+            var now = DateTime.UtcNow;
+
+            foreach (var old in _callOkSmsSent.Where(x => now - x.Value > TimeSpan.FromHours(24)).Select(x => x.Key).ToList())
+                _callOkSmsSent.TryRemove(old, out _);
+
+            return _callOkSmsSent.TryAdd(ticketNo, now);
+        }
+
         // Added by Saurav on dt: 21-Nov-2026 - Old CRM (JobsheetUpdate.aspx.vb) sent this SMS with source "Call OK" when the call was closed as OK.
         // No stored procedure / DB change needed: mobile comes from UpdateComplaintAsync, the SMS is logged through the existing SMSService.
         private async Task SendCallOkSmsAsync(IEnumerable<dynamic> data, List<CallRegisterModel> updatedComplaints)
@@ -113,6 +127,11 @@ namespace MicroservicesWithKafka.Services
                 if (string.IsNullOrWhiteSpace(ticketNo) || string.IsNullOrWhiteSpace(mobile))
                     continue;
 
+                if (!TryMarkCallOkSmsSent(ticketNo))
+                    continue;
+
+                var feedbackId = ticketNo.Length > 10 ? ticketNo.Substring(10) : ticketNo;
+                var message = $"Dear Customer, Your request {ticketNo} has been resolved. Hope you are satisfied with our services. Please provide your valuable feedback at http://feedback.sansuiworld.com:59/CustomerFeedback.aspx?j={feedbackId} . For further assistance, please call 18004193777. Jaina India";
                 var message = $"Dear Customer,Your request {ticketNo} has been resolved. Thanks for your association with Sansui. For further assistance, please call 18605003555";
 
                 try
