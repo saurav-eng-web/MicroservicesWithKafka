@@ -22,6 +22,7 @@ namespace MicroservicesWithKafka.Services
             if (string.IsNullOrWhiteSpace(message) || string.IsNullOrWhiteSpace(mobile))
                 return false;
 
+            // 21-Nov-2026: Dev deploy check - gateway login is sub-user 20181973 (owner of sender GICARE) under reseller 20151823.
             // Replace placeholder {ticketKey} in the template message
             var finalMessage = message.Replace("{ticketKey}", ticketKey);
 
