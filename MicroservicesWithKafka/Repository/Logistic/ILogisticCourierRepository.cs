@@ -10,13 +10,10 @@ namespace MicroservicesWithKafka.Repository.Logistic
         Task<bool> CourierExistsAsync(string courierCode);
         Task<bool> AddCourierAsync(CourierViewModel courier);
 
-        // Translated from CourierMapping.aspx.vb MappingDownload_Click
         Task<IEnumerable<CourierMappingViewModel>> GetMappedCoursAsync();
 
-        // Translated from CourierMapping.aspx.vb MappingNotDownload_Click
         Task<IEnumerable<CourierMappingViewModel>> GetUnmappedCoursAsync();
 
-        // Translated from CourierMapping.aspx.vb bindgrid — bulk upload + SP call
         Task<bool> UploadCourierMappingAsync(IEnumerable<CourierMappingUploadViewModel> rows);
     }
 }

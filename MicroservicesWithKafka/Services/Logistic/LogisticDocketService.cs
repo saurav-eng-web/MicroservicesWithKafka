@@ -11,9 +11,6 @@ namespace MicroservicesWithKafka.Services.Logistic
     {
         private const int MaxUploadRows = 50000;
 
-        // Legacy StatusView.aspx.vb stored lblHeader.Text (the display name) in Session("DhamageShortName")
-        // and History.aspx.vb passed it to sp_DocketDetails @Type. SearchHistory.aspx used the same
-        // display names in its dropdown. StatusView/dashboard links use the codes on the left.
         private static readonly Dictionary<string, string> ChallanTypes = new(StringComparer.OrdinalIgnoreCase)
         {
             ["DefectivePart"]   = "Defective Part",
@@ -31,7 +28,72 @@ namespace MicroservicesWithKafka.Services.Logistic
             _repository = repository;
         }
 
-        public string? ResolveChallanType(string? type)
+        public async Task<(object? Data, int StatusCode, string StatusMsg)> ProcessAsync(object payload, string userId, string userName)
+        {
+            var json = LogisticPayload.Parse(payload);
+            var type = LogisticPayload.RequireType(json, "list", "delete", "history", "search",
+                "uploadChange", "uploadStatus", "uploadForward", "upload", "downloads", "notUploaded");
+
+            switch (type)
+            {
+                case "list":
+                    return (await GetDocketsAsync(LogisticPayload.Str(json, "search")), 200, "Record found Successfully");
+
+                case "delete":
+                {
+                    var result = await DeleteDocketAsync(LogisticPayload.RequireInt(json, "id"));
+                    return (null, result.Success ? 200 : 400, result.Message);
+                }
+
+                case "history":
+                case "search":
+                {
+                    var challanType = ResolveChallanType(LogisticPayload.Str(json, "challanType"))
+                        ?? throw new ArgumentException("A valid challanType is required (e.g. DefectivePart or 'Defective Part').");
+                    var challanNo = LogisticPayload.RequireStr(json, "challanNo");
+
+                    var detail = type == "history"
+                        ? await GetDocketDetailAsync(challanType, challanNo)
+                        : await SearchDocketAsync(challanType, challanNo);
+                    return detail == null ? (null, 404, "No result found") : (detail, 200, "Record found Successfully");
+                }
+
+                case "uploadChange":
+                {
+                    var result = await UploadDocketChangeAsync(DataRows<DocketViewModel>(json), userId);
+                    return (null, result.Success ? 200 : 400, result.Message);
+                }
+
+                case "uploadStatus":
+                {
+                    var result = await UploadDocketChangeStatusAsync(DataRows<DocketViewModel>(json));
+                    return (null, result.Success ? 200 : 400, result.Message);
+                }
+
+                case "uploadForward":
+                {
+                    var result = await UploadForwardDocketsAsync(DataRows<ForwardDocketUploadViewModel>(json), userName);
+                    return result.Success ? (result.NotApplied, 200, result.Message) : (null, 400, result.Message);
+                }
+
+                case "downloads":
+                    return (await GetDocketDownloadsAsync(), 200, "Record found Successfully");
+
+                case "notUploaded":
+                    return (await GetDocketsNotUploadedAsync(), 200, "Record found Successfully");
+
+                default:
+                {
+                    var result = await UploadDocketsAsync(DataRows<DocketUploadRequestViewModel>(json));
+                    return (null, result.Success ? 200 : 400, result.Message);
+                }
+            }
+        }
+
+        private static List<T> DataRows<T>(Newtonsoft.Json.Linq.JObject json)
+            => LogisticPayload.DataArray(json).ToObject<List<T>>() ?? new List<T>();
+
+        private string? ResolveChallanType(string? type)
         {
             if (string.IsNullOrWhiteSpace(type))
                 return null;
@@ -40,21 +102,19 @@ namespace MicroservicesWithKafka.Services.Logistic
             if (ChallanTypes.TryGetValue(key, out var display))
                 return display;
 
-            // Already a display name ("Defective Part")?
             var match = ChallanTypes.Values.FirstOrDefault(v => v.Equals(key, StringComparison.OrdinalIgnoreCase));
             if (match != null)
                 return match;
 
-            // Tolerate "Defective%20Part" variants without spaces, e.g. "defective part" -> code lookup
             return ChallanTypes.TryGetValue(key.Replace(" ", string.Empty), out display) ? display : null;
         }
 
-        public async Task<IEnumerable<DocketViewModel>> GetDocketsAsync(string search)
+        private async Task<IEnumerable<DocketViewModel>> GetDocketsAsync(string search)
         {
             return await _repository.GetDocketsAsync(search);
         }
 
-        public async Task<(bool Success, string Message)> DeleteDocketAsync(int id)
+        private async Task<(bool Success, string Message)> DeleteDocketAsync(int id)
         {
             if (id <= 0)
                 return (false, "Invalid docket id.");
@@ -63,28 +123,25 @@ namespace MicroservicesWithKafka.Services.Logistic
             return (true, "Docket deleted successfully.");
         }
 
-        public async Task<DocketDetailViewModel?> GetDocketDetailAsync(string type, string challanNo)
+        private async Task<DocketDetailViewModel?> GetDocketDetailAsync(string type, string challanNo)
         {
             return await _repository.GetDocketDetailAsync(type, challanNo.Trim());
         }
 
-        public async Task<DocketDetailViewModel?> SearchDocketAsync(string type, string challanNo)
+        private async Task<DocketDetailViewModel?> SearchDocketAsync(string type, string challanNo)
         {
             return await _repository.SearchDocketAsync(type, challanNo.Trim());
         }
 
-        // ---------------- Uploads ----------------
-
         private static bool IsBlank(params string?[] values) => values.All(string.IsNullOrWhiteSpace);
 
-        public async Task<(bool Success, string Message)> UploadDocketChangeAsync(IEnumerable<DocketViewModel> rows, string userId)
+        private async Task<(bool Success, string Message)> UploadDocketChangeAsync(IEnumerable<DocketViewModel> rows, string userId)
         {
             if (rows == null)
                 return (false, "No data provided.");
             if (string.IsNullOrWhiteSpace(userId) || userId == "0")
                 return (false, "Logged-in user could not be identified.");
 
-            // Excel blank rows were ignored by the legacy import; skip them here as well.
             var list = rows.Where(r => r != null && !IsBlank(r.ChallanNo, r.CourierCode, r.DocketNo, r.Type)).ToList();
             if (list.Count == 0)
                 return (false, "No data provided.");
@@ -101,7 +158,7 @@ namespace MicroservicesWithKafka.Services.Logistic
             return (true, $"DATA IMPORTED SUCCESSFULLY. {count} row(s) uploaded.");
         }
 
-        public async Task<(bool Success, string Message)> UploadDocketChangeStatusAsync(IEnumerable<DocketViewModel> rows)
+        private async Task<(bool Success, string Message)> UploadDocketChangeStatusAsync(IEnumerable<DocketViewModel> rows)
         {
             if (rows == null)
                 return (false, "No data provided.");
@@ -118,7 +175,6 @@ namespace MicroservicesWithKafka.Services.Logistic
             if (missing.Count > 0)
                 return (false, $"ChallanNo is required. Check row(s): {string.Join(", ", missing)}.");
 
-            // Validate dates before touching the database so a bad row never leaves a partial import.
             var badDates = new List<int>();
             for (int i = 0; i < list.Count; i++)
             {
@@ -140,8 +196,6 @@ namespace MicroservicesWithKafka.Services.Logistic
             return (true, $"DATA IMPORTED SUCCESSFULLY. {count} row(s) uploaded.");
         }
 
-        // ---------------- Forward Logistic Docket Uploader ----------------
-
         public const string FutureDateMessage = "Future Date Not Allowed Under Transaction Date Please Modify you Excel Sheet";
 
         private static readonly string[] TransDateFormats =
@@ -150,7 +204,6 @@ namespace MicroservicesWithKafka.Services.Logistic
             "dd-MM-yyyy HH:mm:ss", "dd-MM-yyyy HH:mm", "dd-MM-yyyy", "dd/MM/yyyy HH:mm:ss", "dd/MM/yyyy HH:mm", "dd/MM/yyyy"
         };
 
-        // In-Transit / "In Transit" -> "In-Transit", Delivered -> "Delivered", anything else -> null
         private static string? NormalizeDocStatus(string? value)
         {
             var text = (value ?? string.Empty).Trim();
@@ -161,7 +214,7 @@ namespace MicroservicesWithKafka.Services.Logistic
             return null;
         }
 
-        public async Task<(bool Success, string Message, IReadOnlyList<ForwardDocketNotAppliedViewModel> NotApplied)> UploadForwardDocketsAsync(
+        private async Task<(bool Success, string Message, IReadOnlyList<ForwardDocketNotAppliedViewModel> NotApplied)> UploadForwardDocketsAsync(
             IEnumerable<ForwardDocketUploadViewModel> rows, string userName)
         {
             var none = (IReadOnlyList<ForwardDocketNotAppliedViewModel>)new List<ForwardDocketNotAppliedViewModel>();
@@ -171,14 +224,12 @@ namespace MicroservicesWithKafka.Services.Logistic
             if (string.IsNullOrWhiteSpace(userName) || userName == "0")
                 return (false, "Logged-in user could not be identified.", none);
 
-            // Blank Excel rows are skipped
             var list = rows.Where(r => r != null && !IsBlank(r.ChallanNo, r.DocketNo, r.DocStatus, r.TransDate)).ToList();
             if (list.Count == 0)
                 return (false, "No data provided.", none);
             if (list.Count > MaxUploadRows)
                 return (false, $"Too many rows. Maximum {MaxUploadRows} rows per upload.", none);
 
-            // Validate every row before touching the database, so a bad row never leaves a partial import
             var valid = new List<ForwardDocketRow>();
             var missing = new List<int>();
             var badStatus = new List<int>();
@@ -235,7 +286,6 @@ namespace MicroservicesWithKafka.Services.Logistic
 
             string Rows(List<int> numbers) => string.Join(", ", numbers.Take(20));
 
-            // A future Transaction Date is reported first, with the exact message the page shows
             if (futureDate.Count > 0)
                 return (false, $"{FutureDateMessage}. Check row(s): {Rows(futureDate)}.", none);
             if (missing.Count > 0)
@@ -254,17 +304,17 @@ namespace MicroservicesWithKafka.Services.Logistic
             return (true, message, result.NotApplied);
         }
 
-        public async Task<IEnumerable<DocketDownloadViewModel>> GetDocketDownloadsAsync()
+        private async Task<IEnumerable<DocketDownloadViewModel>> GetDocketDownloadsAsync()
         {
             return await _repository.GetDocketDownloadsAsync();
         }
 
-        public async Task<IEnumerable<DocketNotUploadedViewModel>> GetDocketsNotUploadedAsync()
+        private async Task<IEnumerable<DocketNotUploadedViewModel>> GetDocketsNotUploadedAsync()
         {
             return await _repository.GetDocketsNotUploadedAsync();
         }
 
-        public async Task<(bool Success, string Message)> UploadDocketsAsync(IEnumerable<DocketUploadRequestViewModel> rows)
+        private async Task<(bool Success, string Message)> UploadDocketsAsync(IEnumerable<DocketUploadRequestViewModel> rows)
         {
             if (rows == null)
                 return (false, "No data provided.");

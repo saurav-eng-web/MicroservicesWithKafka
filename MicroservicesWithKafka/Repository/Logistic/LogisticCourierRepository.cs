@@ -13,8 +13,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
     {
         private readonly SQLConnectionService _sqlConnectionService;
 
-        // Legacy SqlProceedure used CommandTimeout = 2000000 (effectively no limit). The upload SPs process the whole staging table and can
-        // take longer than the 30 s ADO.NET default, which made the upload fail with HTTP 500.
         private const int SpTimeoutSeconds = 600;
 
         public LogisticCourierRepository(SQLConnectionService sqlConnectionService)
@@ -22,7 +20,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
             _sqlConnectionService = sqlConnectionService;
         }
 
-        // CourierAdd.aspx.vb Page_Init: select CourierName, CourierName1 from CourierMaster
         public async Task<IEnumerable<CourierViewModel>> GetCouriersAsync()
         {
             using var connection = _sqlConnectionService.GetConnection();
@@ -35,7 +32,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
             }).ToList();
         }
 
-        // CourierAdd.aspx.vb btnSave_Click exists check
         public async Task<bool> CourierExistsAsync(string courierCode)
         {
             using var connection = _sqlConnectionService.GetConnection();
@@ -44,7 +40,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
             return rows.Count > 0 && LogisticRowHelper.Int(rows[0], "Total") > 0;
         }
 
-        // CourierAdd.aspx.vb btnSave_Click insert
         public async Task<bool> AddCourierAsync(CourierViewModel courier)
         {
             using var connection = _sqlConnectionService.GetConnection();
@@ -53,7 +48,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
             return rows.Count > 0 && LogisticRowHelper.Int(rows[0], "RowsAffected") > 0;
         }
 
-        // CourierMapping.aspx.vb MappingDownload_Click
         public async Task<IEnumerable<CourierMappingViewModel>> GetMappedCoursAsync()
         {
             using var connection = _sqlConnectionService.GetConnection();
@@ -71,7 +65,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
             }).ToList();
         }
 
-        // CourierMapping.aspx.vb MappingNotDownload_Click
         public async Task<IEnumerable<CourierMappingViewModel>> GetUnmappedCoursAsync()
         {
             using var connection = _sqlConnectionService.GetConnection();
@@ -89,7 +82,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
             }).ToList();
         }
 
-        // CourierMapping.aspx.vb bindgrid — SqlBulkCopy into CourMappingUpload (stays ADO.NET), then the Set_CourierMapping SP
         public async Task<bool> UploadCourierMappingAsync(IEnumerable<CourierMappingUploadViewModel> rows)
         {
             using var connection = _sqlConnectionService.GetConnection();
@@ -116,7 +108,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
                 await bulkCopy.WriteToServerAsync(dt);
             }
 
-            // Process the uploaded mapping data
             await connection.ExecuteAsync("Set_CourierMapping",
                 commandType: CommandType.StoredProcedure, commandTimeout: SpTimeoutSeconds);
 

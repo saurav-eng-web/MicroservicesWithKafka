@@ -3,18 +3,18 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace MicroservicesWithKafka.Repository.Logistic
 {
-    /// <summary>
-    /// Runs the SP_CRUD_Logistic* stored procedures the same way the rest of the system does (see ChallanRepository):
-    /// the data result set(s) come first and the LAST result set is the status row
-    /// (200 + statusMsg on success, 500 + Message on error). A non-200 status is raised as an exception, so callers
-    /// that run inside a SqlTransaction still roll back exactly as before.
-    /// </summary>
     internal static class LogisticSpRunner
     {
+        private static readonly JsonSerializerOptions PayloadOptions = new()
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        };
+
         public static async Task<List<IDictionary<string, object?>>> RunAsync(
             IDbConnection connection,
             string spName,
@@ -22,8 +22,10 @@ namespace MicroservicesWithKafka.Repository.Logistic
             IDbTransaction? transaction = null,
             int? commandTimeout = null)
         {
+            var payload = new { Payload = JsonSerializer.Serialize(parameters ?? new { }, PayloadOptions) };
+
             using var multi = await connection.QueryMultipleAsync(
-                spName, parameters, transaction, commandTimeout, CommandType.StoredProcedure);
+                spName, payload, transaction, commandTimeout, CommandType.StoredProcedure);
 
             var resultSets = new List<List<IDictionary<string, object?>>>();
             while (!multi.IsConsumed)
@@ -41,7 +43,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
                     $"{spName} failed ({statusCode}): {(message.Length > 0 ? message : "Unknown error")}");
             }
 
-            // Every result set before the status set is data
             return resultSets.Take(resultSets.Count - 1).SelectMany(x => x).ToList();
         }
     }

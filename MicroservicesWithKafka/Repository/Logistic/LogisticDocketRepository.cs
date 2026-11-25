@@ -14,8 +14,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
     {
         private readonly SQLConnectionService _sqlConnectionService;
 
-        // Legacy SqlProceedure used CommandTimeout = 2000000 (effectively no limit). The upload SPs process the whole staging table and can
-        // take longer than the 30 s ADO.NET default, which made the upload fail with HTTP 500.
         private const int SpTimeoutSeconds = 600;
 
         public LogisticDocketRepository(SQLConnectionService sqlConnectionService)
@@ -25,16 +23,8 @@ namespace MicroservicesWithKafka.Repository.Logistic
 
         private static string S(IDictionary<string, object?> row, params string[] names) => LogisticRowHelper.Str(row, names);
 
-        // ------------------------------------------------------------------
-        // Delete Docket (DeleteDocket.aspx.vb)
-        // ------------------------------------------------------------------
-
-        // Legacy: DocMaster_Proc @Action='SELECT' (+ @Search = docket number when the textbox is filled).
-        // The legacy grid used AutoGenerateColumns with DataKeyNames="id", so the SP column list is not
-        // fixed in code. Columns are read defensively so a missing column never throws.
         public async Task<IEnumerable<DocketViewModel>> GetDocketsAsync(string search)
         {
-            // Legacy BindGrid() did not send @Search at all when the textbox was empty.
             var parameters = new DynamicParameters();
             parameters.Add("Action", "SELECT");
             if (!string.IsNullOrWhiteSpace(search))
@@ -47,8 +37,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
             {
                 Id           = int.TryParse(S(r, "id"), out var id) ? id : (int?)null,
                 ChallanNo    = S(r, "ChallanNo"),
-                // DocMaster_Proc SELECT returns exactly [ID], [Courier Name], [Docket No]
-                // ("Courier Name" is CourierMaster.CourierName, i.e. the courier code).
                 CourierCode  = S(r, "Courier Name", "CourierCode", "Courier", "CourierName"),
                 DocketNo     = S(r, "Docket No", "DocketNo", "Docket"),
                 Type         = S(r, "Type", "InventoryType"),
@@ -58,8 +46,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
             }).ToList();
         }
 
-        // Legacy: DocMaster_Proc @Action='DELETE', @CustomerId=<grid id>. The legacy page ignored the
-        // affected-row count and simply re-bound the grid, so success = the SP ran without error.
         public async Task<bool> DeleteDocketAsync(int id)
         {
             using var connection = _sqlConnectionService.GetConnection();
@@ -68,31 +54,12 @@ namespace MicroservicesWithKafka.Repository.Logistic
             return true;
         }
 
-        // ------------------------------------------------------------------
-        // History / Search History (History.aspx.vb, SearchHistory.aspx.vb)
-        // ------------------------------------------------------------------
-
-        // Legacy History.aspx.vb: sp_DocketDetails(@Type=<display name>, @PONo) -> Tables(0) header only.
-        // sp_DocketDetails only returns challans whose DocketStatus is 'Dispatched', so In-Transit / Pickup Awaited challans
-        // (now listed by Status View) came back with an empty header. sp_DocketDetailsSearch has the same columns for every
-        // docket status, so the history header uses it.
         public Task<DocketDetailViewModel?> GetDocketDetailAsync(string type, string challanNo)
             => GetDocketHeaderWithHistoryAsync("sp_DocketDetailsSearch", type, challanNo, allowEmptyHeader: true);
 
-        // Legacy SearchHistory.aspx.vb: sp_DocketDetailsSearch(@Type=<dropdown text>, @PONo) -> Tables(0).
         public Task<DocketDetailViewModel?> SearchDocketAsync(string type, string challanNo)
             => GetDocketHeaderWithHistoryAsync("sp_DocketDetailsSearch", type, challanNo, allowEmptyHeader: false);
 
-        /// <summary>
-        /// Reads the header row from the given SP, then (as in legacy) loads the history grid
-        /// from PickUPhistory (SP_CRUD_LogisticDocket HISTORY). Returns null when the SP returns no row
-        /// (legacy showed "No result found").
-        /// </summary>
-        /// <param name="allowEmptyHeader">
-        /// History.aspx always loaded the PickUPhistory grid even when sp_DocketDetails returned no header row,
-        /// so History passes true (null is returned only when there is no header AND no history rows).
-        /// SearchHistory.aspx exited early with "No result found" when the SP returned no row, so Search passes false.
-        /// </param>
         private async Task<DocketDetailViewModel?> GetDocketHeaderWithHistoryAsync(string spName, string type, string challanNo, bool allowEmptyHeader)
         {
             using var connection = _sqlConnectionService.GetConnection();
@@ -121,7 +88,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
                 }
                 : new DocketDetailViewModel { ChallanNo = challanNo };
 
-            // Legacy: select PStatus,Remark,convert(nvarchar,tdate,101) As Tdate from PickUPhistory where ChallanNo='...'
             var historyRows = await LogisticSpRunner.RunAsync(connection, "SP_CRUD_LogisticDocket",
                 new { Type = "history", ChallanNo = challanNo });
             foreach (var h in historyRows)
@@ -134,20 +100,12 @@ namespace MicroservicesWithKafka.Repository.Logistic
                 });
             }
 
-            // No header and no history rows: nothing to show ("No result found").
             if (!headerFound && detail.History.Count == 0)
                 return null;
 
             return detail;
         }
 
-        // ------------------------------------------------------------------
-        // Update Docket Details (DocketChange.aspx.vb)
-        // ------------------------------------------------------------------
-
-        // Legacy: Excel(ChallanNo, CourierCode, DocketNo, Type) -> SqlBulkCopy into DocketChange with
-        // mappings ChallanNo->ChallanNo, CourierCode->CourierCode, DocketNo->DocketNo, Type->Type;
-        // then "Update DocketChange set Userid='<uidfic>' where IsUpdate=0"; then Set_updateDocketChange.
         public async Task<int> UploadDocketChangeAsync(IEnumerable<DocketViewModel> rows, string userId)
         {
             var dt = new DataTable();
@@ -168,7 +126,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
             using var connection = _sqlConnectionService.GetConnection();
             await connection.OpenAsync();
 
-            // Bulk copy + user stamp are atomic; the SP runs afterwards exactly as in legacy.
             using (var transaction = connection.BeginTransaction())
             {
                 try
@@ -183,7 +140,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
                         await bulkCopy.WriteToServerAsync(dt);
                     }
 
-                    // A non-200 status from the SP is raised as an exception, so the rollback below still happens
                     await LogisticSpRunner.RunAsync(connection, "SP_CRUD_LogisticDocket",
                         new { Type = "stampuser", UserId = userId }, transaction);
 
@@ -202,13 +158,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
             return dt.Rows.Count;
         }
 
-        // ------------------------------------------------------------------
-        // Update Docket Status (DocketChangeStatus.aspx.vb)
-        // ------------------------------------------------------------------
-
-        // Legacy mappings: ChallanNo->ChallanNo, Type->Type, PickupDate->PickupDate,
-        // DeliveryDate->DeliveryDate, Status->DocStatus; then Set_updateDocketChangeStatus.
-        // Dates are sent as DateTime values, the same as the legacy OLEDB Excel reader produced.
         public async Task<int> UploadDocketChangeStatusAsync(IEnumerable<DocketViewModel> rows)
         {
             var dt = new DataTable();
@@ -248,11 +197,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
             return dt.Rows.Count;
         }
 
-        /// <summary>
-        /// Converts an uploaded date string to a DateTime (or DBNull when blank).
-        /// Accepts ISO dates, dd-MM-yyyy / dd/MM/yyyy and raw Excel serial numbers (e.g. 45267),
-        /// because real legacy files store Excel dates. Throws FormatException for anything else.
-        /// </summary>
         public static object ParseDate(string? value)
         {
             if (string.IsNullOrWhiteSpace(value))
@@ -276,11 +220,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
             throw new FormatException($"Invalid date '{value}'. Use yyyy-MM-dd or dd-MM-yyyy.");
         }
 
-        // ------------------------------------------------------------------
-        // Docket Upload (root DocketUpload.aspx.vb)
-        // ------------------------------------------------------------------
-
-        // Legacy DownloadDocket_Click
         public async Task<IEnumerable<DocketDownloadViewModel>> GetDocketDownloadsAsync()
         {
             using var connection = _sqlConnectionService.GetConnection();
@@ -298,7 +237,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
             }).ToList();
         }
 
-        // Legacy DocketNot_Click
         public async Task<IEnumerable<DocketNotUploadedViewModel>> GetDocketsNotUploadedAsync()
         {
             using var connection = _sqlConnectionService.GetConnection();
@@ -314,17 +252,10 @@ namespace MicroservicesWithKafka.Repository.Logistic
             }).ToList();
         }
 
-        // ------------------------------------------------------------------
-        // Forward Logistic Docket Uploader
-        // ------------------------------------------------------------------
-
-        // The Excel rows go into challdocketstusuploder (IsProcess = 0, CreatedBy = login user name) and SP_CRUD_LogisticForwardDocket then updates
-        // tbl_PORecieveHistory (In-Transit -> Docket_transit_Date, Delivered -> Docket_Delivery_date). Everything runs in ONE transaction:
-        // if the SP fails (e.g. a future Trans_Date) the staged rows are rolled back too, so nothing is left half done.
         public async Task<ForwardDocketUploadResult> UploadForwardDocketsAsync(IEnumerable<ForwardDocketRow> rows, string userName)
         {
             var dt = new DataTable();
-            dt.Columns.Add("Challa_No",    typeof(string));
+            dt.Columns.Add("Challan_No",   typeof(string));
             dt.Columns.Add("Docket_No",    typeof(string));
             dt.Columns.Add("DOC_status",   typeof(string));
             dt.Columns.Add("Trans_Date",   typeof(DateTime));
@@ -374,7 +305,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
             }
         }
 
-        // Legacy bindgrid: Excel(CourierCode, DocketNo) -> DocMasterUpload(Courier, DocketNo) -> Set_updateDocketData
         public async Task<int> UploadDocketsAsync(IEnumerable<DocketUploadRequestViewModel> rows)
         {
             var dt = new DataTable();

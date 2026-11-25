@@ -26,7 +26,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
             return LogisticRowHelper.ToRows(rows);
         }
 
-        // Query the SP_CRUD_LogisticChallan branches (the SQL of each legacy page lives in that SP)
         private async Task<List<IDictionary<string, object?>>> QueryChallanAsync(string type, ChallanSearchRequestViewModel request)
         {
             using var connection = _sqlConnectionService.GetConnection();
@@ -40,15 +39,8 @@ namespace MicroservicesWithKafka.Repository.Logistic
             });
         }
 
-        // ------------------------------------------------------------------
-        // Logistic/PrintDefectiveChallan.aspx.vb (menu "Defective Challan")
-        // PrintChallanList(@SfId=ascintcode, @Type, @Month, @Year).
-        // Legacy grid: Challan No (ponumber, link), SF Name (sfname), Challan Date (date), Doc. No. (status).
-        // spType is already mapped to the SP value (Defective, DOA, goodspare, GoodFG, MisFG, MisSpare).
-        // ------------------------------------------------------------------
         public async Task<IEnumerable<DefectiveChallanViewModel>> GetPrintChallanListAsync(string sfId, string spType, int month, int year)
         {
-            // Legacy passed ddlmonth.SelectedValue / ddlyear.SelectedItem.Text (strings).
             var rows = await QueryAsync("PrintChallanList", new
             {
                 SfId = sfId,
@@ -59,9 +51,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
             return rows.Select(ToDefectiveChallan).ToList();
         }
 
-        // ------------------------------------------------------------------
-        // Logistic/PrintDOADefectiveChallan.aspx.vb (menu "Defective DOA Challan")
-        // ------------------------------------------------------------------
         public async Task<IEnumerable<DefectiveChallanViewModel>> GetDOADefectiveChallansAsync(ChallanSearchRequestViewModel request)
         {
             var rows = await QueryChallanAsync("doa", request);
@@ -77,9 +66,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
             Status   = S(r, "status")
         };
 
-        // ------------------------------------------------------------------
-        // Logistic/PrintGoodChallan.aspx.vb — exact legacy query (Tbl_GudPOMaster uses Gud_* columns).
-        // ------------------------------------------------------------------
         public async Task<IEnumerable<GoodPartChallanViewModel>> GetGoodChallansAsync(ChallanSearchRequestViewModel request)
         {
             var rows = await QueryChallanAsync("good", request);
@@ -92,9 +78,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
             }).ToList();
         }
 
-        // ------------------------------------------------------------------
-        // Logistic/PrintGoodChallanMachine.aspx.vb
-        // ------------------------------------------------------------------
         public async Task<IEnumerable<GoodChallanViewModel>> GetGoodMachineChallansAsync(ChallanSearchRequestViewModel request)
         {
             var rows = await QueryChallanAsync("goodmachine", request);
@@ -109,9 +92,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
             }).ToList();
         }
 
-        // ------------------------------------------------------------------
-        // Logistic/PrintMisChallan.aspx.vb
-        // ------------------------------------------------------------------
         public async Task<IEnumerable<MisChallanViewModel>> GetMisChallansAsync(ChallanSearchRequestViewModel request)
         {
             var rows = await QueryChallanAsync("mis", request);
@@ -124,9 +104,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
             }).ToList();
         }
 
-        // ------------------------------------------------------------------
-        // Logistic/PrintMisChallanFG.aspx.vb — SF = Session("sidfic") in legacy (resolved by the controller).
-        // ------------------------------------------------------------------
         public async Task<IEnumerable<GoodChallanViewModel>> GetMisChallanFGAsync(ChallanSearchRequestViewModel request)
         {
             var rows = await QueryChallanAsync("misfg", request);
@@ -141,11 +118,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
             }).ToList();
         }
 
-        // ------------------------------------------------------------------
-        // SF dropdowns
-        // ------------------------------------------------------------------
-
-        // Legacy PrintDefectiveChallan.aspx.vb: ASClist(@id='', @Role='LOG') -> DataTextField asc_name, DataValueField ascintcode.
         public async Task<IEnumerable<AscOptionViewModel>> GetLogisticAscListAsync()
         {
             var rows = await QueryAsync("ASClist", new { id = "", Role = "LOG" });
@@ -156,8 +128,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
             }).ToList();
         }
 
-        // Legacy DOA / Good / Good Machine / Mis pages:
-        // select ASCINTCODE,ASC_NAME from ASC_MASTER order by ASC_Name
         public async Task<IEnumerable<AscOptionViewModel>> GetAscMasterListAsync()
         {
             using var connection = _sqlConnectionService.GetConnection();

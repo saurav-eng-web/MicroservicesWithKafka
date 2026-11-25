@@ -8,11 +8,6 @@ using System.Threading.Tasks;
 
 namespace MicroservicesWithKafka.Repository.Logistic
 {
-    /// <summary>
-    /// Translated from GST/LogisticInvoiceUploader.aspx.vb and GST/LogisticInvoiceRateUploader.aspx.vb.
-    /// Legacy: SqlBulkCopy Sheet1 -> table, then "update ... set CreatedBy='<Session UName>' where IsProcess=0".
-    /// (Both legacy pages then called an SP with an empty name, which did nothing, so no SP is called here.)
-    /// </summary>
     public class LogisticInvoiceUploadRepository : ILogisticInvoiceUploadRepository
     {
         private readonly SQLConnectionService _sqlConnectionService;
@@ -22,7 +17,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
             _sqlConnectionService = sqlConnectionService;
         }
 
-        /// <summary>Blank Excel cells reached SQL as NULL through the legacy OLEDB reader.</summary>
         private static object Cell(string? value)
             => string.IsNullOrWhiteSpace(value) ? System.DBNull.Value : value.Trim();
 
@@ -41,7 +35,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
                     await bulkCopy.WriteToServerAsync(dt);
                 }
 
-                // A non-200 status from the SP is raised as an exception, so the rollback below still happens
                 await LogisticSpRunner.RunAsync(connection, "SP_CRUD_LogisticInvoiceUpload",
                     new { Type = table == "LogisticInvoicePOUploader" ? "stamppo" : "stamprate", UserName = userName },
                     transaction);
