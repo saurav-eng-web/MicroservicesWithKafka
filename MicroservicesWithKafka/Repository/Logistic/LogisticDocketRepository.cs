@@ -324,7 +324,7 @@ namespace MicroservicesWithKafka.Repository.Logistic
         public async Task<ForwardDocketUploadResult> UploadForwardDocketsAsync(IEnumerable<ForwardDocketRow> rows, string userName)
         {
             var dt = new DataTable();
-            dt.Columns.Add("Challa_No",    typeof(string));
+            dt.Columns.Add("Challan_No",   typeof(string));
             dt.Columns.Add("Docket_No",    typeof(string));
             dt.Columns.Add("DOC_status",   typeof(string));
             dt.Columns.Add("Trans_Date",   typeof(DateTime));

@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace MicroservicesWithKafka.Repository.Logistic
@@ -15,6 +16,11 @@ namespace MicroservicesWithKafka.Repository.Logistic
     /// </summary>
     internal static class LogisticSpRunner
     {
+        private static readonly JsonSerializerOptions PayloadOptions = new()
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        };
+
         public static async Task<List<IDictionary<string, object?>>> RunAsync(
             IDbConnection connection,
             string spName,
@@ -22,8 +28,12 @@ namespace MicroservicesWithKafka.Repository.Logistic
             IDbTransaction? transaction = null,
             int? commandTimeout = null)
         {
+            // Same contract as SP_CRUD_ConsumptionProcess: ONE parameter @Payload (JSON); the SP reads it with JSON_VALUE.
+            // Property names become camelCase keys, e.g. new { Type = "get", AscName = "x" } -> {"type":"get","ascName":"x"}
+            var payload = new { Payload = JsonSerializer.Serialize(parameters ?? new { }, PayloadOptions) };
+
             using var multi = await connection.QueryMultipleAsync(
-                spName, parameters, transaction, commandTimeout, CommandType.StoredProcedure);
+                spName, payload, transaction, commandTimeout, CommandType.StoredProcedure);
 
             var resultSets = new List<List<IDictionary<string, object?>>>();
             while (!multi.IsConsumed)
