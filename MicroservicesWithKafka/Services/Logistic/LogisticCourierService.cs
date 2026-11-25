@@ -1,5 +1,7 @@
 using MicroservicesWithKafka.Models.Logistic;
 using MicroservicesWithKafka.Repository.Logistic;
+using Newtonsoft.Json.Linq;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -15,59 +17,64 @@ namespace MicroservicesWithKafka.Services.Logistic
             _repository = repository;
         }
 
-        public async Task<IEnumerable<CourierViewModel>> GetCouriersAsync()
+        public async Task<(object? Data, int StatusCode, string StatusMsg)> ProcessAsync(object payload)
         {
-            return await _repository.GetCouriersAsync();
+            var json = LogisticPayload.Parse(payload);
+            var type = LogisticPayload.RequireType(json, "list", "add", "mapped", "unmapped", "uploadMapping");
+
+            switch (type)
+            {
+                case "list":
+                    return (await _repository.GetCouriersAsync(), 200, "Record found Successfully");
+
+                case "add":
+                    return await AddCourierAsync(json);
+
+                case "mapped":
+                    return (await _repository.GetMappedCoursAsync(), 200, "Record found Successfully");
+
+                case "unmapped":
+                    return (await _repository.GetUnmappedCoursAsync(), 200, "Record found Successfully");
+
+                default:
+                    return await UploadCourierMappingAsync(json);
+            }
         }
 
-        public async Task<(bool Success, string Message)> AddCourierAsync(CourierViewModel courier)
+        private async Task<(object? Data, int StatusCode, string StatusMsg)> AddCourierAsync(JObject json)
         {
-            if (string.IsNullOrWhiteSpace(courier.CourierCode) || string.IsNullOrWhiteSpace(courier.CourierName))
-                return (false, "Courier Code and Name are required.");
+            var courier = new CourierViewModel
+            {
+                CourierCode = LogisticPayload.Str(json, "courierCode"),
+                CourierName = LogisticPayload.Str(json, "courierName")
+            };
 
-            courier.CourierCode = courier.CourierCode.Trim();
-            courier.CourierName = courier.CourierName.Trim();
+            if (courier.CourierCode.Length == 0 || courier.CourierName.Length == 0)
+                return (null, 400, "Courier Code and Name are required.");
 
-            // Exactly replicating logic from CourierAdd.aspx.vb: Check if exists first
-            bool exists = await _repository.CourierExistsAsync(courier.CourierCode);
-            if (exists)
-                return (false, "Courier already exists.");
+            if (await _repository.CourierExistsAsync(courier.CourierCode))
+                return (null, 400, "Courier already exists.");
 
             bool saved = await _repository.AddCourierAsync(courier);
-            return saved ? (true, "Data saved successfully.") : (false, "Failed to save courier.");
+            return saved ? (null, 200, "Data saved successfully.") : (null, 400, "Failed to save courier.");
         }
 
-        // Translated from CourierMapping.aspx.vb MappingDownload_Click
-        public async Task<IEnumerable<CourierMappingViewModel>> GetMappedCoursAsync()
+        private async Task<(object? Data, int StatusCode, string StatusMsg)> UploadCourierMappingAsync(JObject json)
         {
-            return await _repository.GetMappedCoursAsync();
-        }
+            var rows = LogisticPayload.DataArray(json).ToObject<List<CourierMappingUploadViewModel>>() ?? new List<CourierMappingUploadViewModel>();
 
-        // Translated from CourierMapping.aspx.vb MappingNotDownload_Click
-        public async Task<IEnumerable<CourierMappingViewModel>> GetUnmappedCoursAsync()
-        {
-            return await _repository.GetUnmappedCoursAsync();
-        }
-
-        // Translated from CourierMapping.aspx.vb btnUpload_Click
-        public async Task<(bool Success, string Message)> UploadCourierMappingAsync(IEnumerable<CourierMappingUploadViewModel> rows)
-        {
-            if (rows == null)
-                return (false, "No data provided.");
-
-            // Excel blank rows were ignored by the legacy OLEDB import.
             var list = rows.Where(r => r != null && !(string.IsNullOrWhiteSpace(r.CourierCode) && string.IsNullOrWhiteSpace(r.Pincode)
                                                       && string.IsNullOrWhiteSpace(r.Slab) && string.IsNullOrWhiteSpace(r.Priority)
                                                       && string.IsNullOrWhiteSpace(r.Action)))
                            .ToList();
             if (list.Count == 0)
-                return (false, "No data provided.");
+                return (null, 400, "No data provided.");
 
             var missing = list.Select((r, i) => new { r, Row = i + 1 })
                               .Where(x => string.IsNullOrWhiteSpace(x.r.CourierCode) || string.IsNullOrWhiteSpace(x.r.Pincode))
                               .Select(x => x.Row).Take(20).ToList();
             if (missing.Count > 0)
-                return (false, $"CourierCode and Pincode are required. Check row(s): {string.Join(", ", missing)}.");
+                return (null, 400, $"CourierCode and Pincode are required. Check row(s): {string.Join(", ", missing)}.");
 
             foreach (var r in list)
             {
@@ -79,7 +86,7 @@ namespace MicroservicesWithKafka.Services.Logistic
             }
 
             await _repository.UploadCourierMappingAsync(list);
-            return (true, $"DATA IMPORTED SUCCESSFULLY. {list.Count} row(s) uploaded.");
+            return (null, 200, $"DATA IMPORTED SUCCESSFULLY. {list.Count} row(s) uploaded.");
         }
     }
 }

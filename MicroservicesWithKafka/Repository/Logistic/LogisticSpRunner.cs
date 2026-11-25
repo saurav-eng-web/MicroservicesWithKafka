@@ -8,12 +8,6 @@ using System.Threading.Tasks;
 
 namespace MicroservicesWithKafka.Repository.Logistic
 {
-    /// <summary>
-    /// Runs the SP_CRUD_Logistic* stored procedures the same way the rest of the system does (see ChallanRepository):
-    /// the data result set(s) come first and the LAST result set is the status row
-    /// (200 + statusMsg on success, 500 + Message on error). A non-200 status is raised as an exception, so callers
-    /// that run inside a SqlTransaction still roll back exactly as before.
-    /// </summary>
     internal static class LogisticSpRunner
     {
         private static readonly JsonSerializerOptions PayloadOptions = new()
@@ -28,8 +22,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
             IDbTransaction? transaction = null,
             int? commandTimeout = null)
         {
-            // Same contract as SP_CRUD_ConsumptionProcess: ONE parameter @Payload (JSON); the SP reads it with JSON_VALUE.
-            // Property names become camelCase keys, e.g. new { Type = "get", AscName = "x" } -> {"type":"get","ascName":"x"}
             var payload = new { Payload = JsonSerializer.Serialize(parameters ?? new { }, PayloadOptions) };
 
             using var multi = await connection.QueryMultipleAsync(
@@ -51,7 +43,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
                     $"{spName} failed ({statusCode}): {(message.Length > 0 ? message : "Unknown error")}");
             }
 
-            // Every result set before the status set is data
             return resultSets.Take(resultSets.Count - 1).SelectMany(x => x).ToList();
         }
     }

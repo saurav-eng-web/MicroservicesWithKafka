@@ -21,21 +21,22 @@ namespace MicroservicesWithKafka.Controllers.Logistic
             _logger = logger;
         }
 
-        /// <summary>
-        /// Logistic dashboard counts (sp_LogisticDashBoard) + courier availability (unused dockets per courier).
-        /// Replaces Dashboard.aspx.vb Page_Load.
-        /// </summary>
-        [HttpGet("summary")]
-        public async Task<IActionResult> GetDashboardSummary()
+        [HttpPost("process")]
+        public async Task<IActionResult> Process([FromBody] object payload)
         {
             try
             {
-                return Ok(await _service.GetDashboardSummaryAsync());
+                var (data, code, msg) = await _service.ProcessAsync(payload);
+                return StatusCode(code, LogisticResponse.Build(code, msg, data));
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(LogisticResponse.Build(400, ex.Message, null));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Logistic dashboard summary failed");
-                return StatusCode(500, new { message = "Failed to load dashboard. Please try again or contact support." });
+                return StatusCode(500, LogisticResponse.Build(500, "Failed to load dashboard. Please try again or contact support.", null));
             }
         }
     }

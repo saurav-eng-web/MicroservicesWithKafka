@@ -18,7 +18,20 @@ namespace MicroservicesWithKafka.Services.Logistic
 
         private static bool AllBlank(params string?[] values) => values.All(string.IsNullOrWhiteSpace);
 
-        public async Task<(bool Success, string Message)> UploadInvoicePoAsync(IEnumerable<LogisticInvoicePoUploadViewModel> rows, string userName)
+        public async Task<(object? Data, int StatusCode, string StatusMsg)> ProcessAsync(object payload, string userName)
+        {
+            var json = LogisticPayload.Parse(payload);
+            var type = LogisticPayload.RequireType(json, "po", "rate");
+            var data = LogisticPayload.DataArray(json);
+
+            var result = type == "po"
+                ? await UploadInvoicePoAsync(data.ToObject<List<LogisticInvoicePoUploadViewModel>>() ?? new(), userName)
+                : await UploadInvoiceRateAsync(data.ToObject<List<LogisticInvoiceRateUploadViewModel>>() ?? new(), userName);
+
+            return (null, result.Success ? 200 : 400, result.Message);
+        }
+
+        private async Task<(bool Success, string Message)> UploadInvoicePoAsync(IEnumerable<LogisticInvoicePoUploadViewModel> rows, string userName)
         {
             if (rows == null) return (false, "No data provided.");
             if (string.IsNullOrWhiteSpace(userName)) return (false, "Logged-in user could not be identified.");
@@ -37,7 +50,7 @@ namespace MicroservicesWithKafka.Services.Logistic
             return (true, $"DATA IMPORTED SUCCESSFULLY. {count} row(s) uploaded.");
         }
 
-        public async Task<(bool Success, string Message)> UploadInvoiceRateAsync(IEnumerable<LogisticInvoiceRateUploadViewModel> rows, string userName)
+        private async Task<(bool Success, string Message)> UploadInvoiceRateAsync(IEnumerable<LogisticInvoiceRateUploadViewModel> rows, string userName)
         {
             if (rows == null) return (false, "No data provided.");
             if (string.IsNullOrWhiteSpace(userName)) return (false, "Logged-in user could not be identified.");

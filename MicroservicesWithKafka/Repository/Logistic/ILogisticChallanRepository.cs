@@ -6,7 +6,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
 {
     public interface ILogisticChallanRepository
     {
-        // Logistic/PrintDefectiveChallan.aspx.vb -> PrintChallanList SP
         Task<IEnumerable<DefectiveChallanViewModel>> GetPrintChallanListAsync(string sfId, string spType, int month, int year);
         Task<IEnumerable<DefectiveChallanViewModel>> GetDOADefectiveChallansAsync(ChallanSearchRequestViewModel request);
         Task<IEnumerable<GoodPartChallanViewModel>> GetGoodChallansAsync(ChallanSearchRequestViewModel request);

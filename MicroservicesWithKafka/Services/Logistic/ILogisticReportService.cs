@@ -3,12 +3,14 @@ using System.Threading.Tasks;
 
 namespace MicroservicesWithKafka.Services.Logistic
 {
+    public class LogisticReportFile
+    {
+        public string ReportName { get; set; } = string.Empty;
+        public List<IDictionary<string, object>> Rows { get; set; } = new();
+    }
+
     public interface ILogisticReportService
     {
-        Task<IEnumerable<dynamic>> GetAvailableDocketReportAsync();
-        Task<IEnumerable<dynamic>> GetUsedDocketReportAsync();
-        Task<IEnumerable<dynamic>> GetCompleteDocketReportAsync();
-        Task<IEnumerable<dynamic>> GetTotalDispatchReportAsync(string fromDate, string toDate);
-        Task<IEnumerable<dynamic>> GetTotalDispatchHeaderReportAsync(string fromDate, string toDate);
+        Task<(object? Data, int StatusCode, string StatusMsg)> ProcessAsync(object payload);
     }
 }

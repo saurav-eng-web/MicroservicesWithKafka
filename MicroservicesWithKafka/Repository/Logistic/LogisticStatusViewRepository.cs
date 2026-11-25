@@ -10,7 +10,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
 {
     public interface ILogisticStatusViewRepository
     {
-        // Translated from StatusView.aspx.vb Page_Load — each type maps to a specific table query
         Task<IEnumerable<StatusViewViewModel>> GetStatusViewAsync(string type);
     }
 
@@ -28,7 +27,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
             _sqlConnectionService = sqlConnectionService;
         }
 
-        // StatusView.aspx.vb Page_Load — the 6 query branches by type now live in SP_CRUD_LogisticStatusView
         public async Task<IEnumerable<StatusViewViewModel>> GetStatusViewAsync(string type)
         {
             if (!ValidTypes.Contains(type))

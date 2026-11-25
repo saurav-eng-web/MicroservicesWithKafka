@@ -3,7 +3,6 @@ using System.Threading.Tasks;
 
 namespace MicroservicesWithKafka.Repository.Logistic
 {
-    /// <summary>Legacy ReportLog.aspx.vb ("All Reports" in the Logistic menu). Column sets come from the SPs.</summary>
     public interface ILogisticReportRepository
     {
         Task<IEnumerable<dynamic>> GetAvailableDocketReportAsync();

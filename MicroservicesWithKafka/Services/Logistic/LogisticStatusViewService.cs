@@ -1,17 +1,18 @@
-using MicroservicesWithKafka.Models.Logistic;
 using MicroservicesWithKafka.Repository.Logistic;
-using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace MicroservicesWithKafka.Services.Logistic
 {
     public interface ILogisticStatusViewService
     {
-        Task<IEnumerable<StatusViewViewModel>> GetStatusViewAsync(string type);
+        Task<(object? Data, int StatusCode, string StatusMsg)> ProcessAsync(object payload);
     }
 
     public class LogisticStatusViewService : ILogisticStatusViewService
     {
+        private static readonly string[] AllowedTypes =
+            { "DefectivePart", "DefectiveDOA", "GoodPart", "GoodMachine", "MismatchPart", "MismatchMachine" };
+
         private readonly ILogisticStatusViewRepository _repository;
 
         public LogisticStatusViewService(ILogisticStatusViewRepository repository)
@@ -19,10 +20,13 @@ namespace MicroservicesWithKafka.Services.Logistic
             _repository = repository;
         }
 
-        // Translated from StatusView.aspx.vb grdReverseDamageMismatch binding
-        public async Task<IEnumerable<StatusViewViewModel>> GetStatusViewAsync(string type)
+        public async Task<(object? Data, int StatusCode, string StatusMsg)> ProcessAsync(object payload)
         {
-            return await _repository.GetStatusViewAsync(type);
+            var json = LogisticPayload.Parse(payload);
+            var type = LogisticPayload.RequireType(json, AllowedTypes);
+
+            var data = await _repository.GetStatusViewAsync(type);
+            return (data, 200, "Record found Successfully");
         }
     }
 }

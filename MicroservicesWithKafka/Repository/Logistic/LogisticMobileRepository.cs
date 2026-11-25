@@ -8,10 +8,6 @@ using System.Threading.Tasks;
 
 namespace MicroservicesWithKafka.Repository.Logistic
 {
-    /// <summary>
-    /// Translated from the legacy Mob/* pages in the Logistic "Mobile" menu. All of them used
-    /// AppSettings("Conn") (main SansuiCRM database).
-    /// </summary>
     public class LogisticMobileRepository : ILogisticMobileRepository
     {
         private const int ReportTimeoutSeconds = 600;
@@ -25,7 +21,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
         private static List<IDictionary<string, object>> ToRows(IEnumerable<dynamic> rows)
             => rows.Select(r => (IDictionary<string, object>)r).ToList();
 
-        // Mob/PrintDefectiveChallanho.aspx.vb: ASClistm(@id='', @Role='LOG') -> DataTextField asc_name, DataValueField ASC_id
         public async Task<IEnumerable<dynamic>> GetAscListAsync()
         {
             using var connection = _sqlConnectionService.GetConnection();
@@ -33,7 +28,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
                 commandType: CommandType.StoredProcedure);
         }
 
-        // Mob/PrintDefectiveChallanho.aspx.vb: PrintChallanListm(@SfId, @Type, @Month, @Year)
         public async Task<IEnumerable<dynamic>> GetChallanListAsync(string sfId, string spType, int month, int year)
         {
             using var connection = _sqlConnectionService.GetConnection();
@@ -42,7 +36,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
                 commandType: CommandType.StoredProcedure);
         }
 
-        // Mob/PrintInvoiceDef_NSP.aspx.vb: ChallanLinem(@PoNo, @Type) lines + invoicedetail1m(@PONum, @Type) header (row 0)
         public async Task<MobileChallanPrintViewModel> GetChallanPrintAsync(string poNo, string spType)
         {
             using var connection = _sqlConnectionService.GetConnection();
@@ -58,7 +51,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
             };
         }
 
-        // Mob/reportsm.aspx.vb DOAExcel: reportsm(@fromdate, @todate, @type, @userid)
         public async Task<IEnumerable<dynamic>> GetReportAsync(string type, string fromDate, string toDate, string userId)
         {
             using var connection = _sqlConnectionService.GetConnection();
@@ -67,7 +59,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
                 commandType: CommandType.StoredProcedure, commandTimeout: ReportTimeoutSeconds);
         }
 
-        // Mob/ComplaintSearch.aspx.vb cmdSearch_Click: Search_Customer25(@Text, @UserId, @ipaddress)
         public async Task<IEnumerable<dynamic>> SearchComplaintsAsync(string text, string userId, string ipAddress)
         {
             using var connection = _sqlConnectionService.GetConnection();
@@ -76,9 +67,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
                 commandType: CommandType.StoredProcedure);
         }
 
-        // Mob/complainthistory.aspx.vb: sp_ReminderHistory6(@TicketKey, @Userid) — the page showed result sets
-        // 0 (Custdetail), 1 (Custdetail1), 2 (GrdProduct), 3 (GrdCompdetail), 4 (GrdCompdetail1), 9 (GrdHistory);
-        // plus sp_GetSupportingDocumentmah(@Ticket_Key, @Userid) -> GrdDocument.
         public async Task<MobileComplaintHistoryViewModel> GetComplaintHistoryAsync(string ticketKey, string userId)
         {
             var sets = new List<List<IDictionary<string, object>>>();

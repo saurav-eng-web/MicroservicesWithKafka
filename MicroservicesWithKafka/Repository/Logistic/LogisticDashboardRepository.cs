@@ -18,19 +18,15 @@ namespace MicroservicesWithKafka.Repository.Logistic
             _sqlConnectionService = sqlConnectionService;
         }
 
-        // Translated from Dashboard.aspx.vb Page_Load – sp_LogisticDashBoard (challan counts) + SP_CRUD_LogisticDashboard (courier availability)
         public async Task<DashboardSummaryViewModel> GetDashboardSummaryAsync()
         {
             var summary = new DashboardSummaryViewModel();
 
             using var connection = _sqlConnectionService.GetConnection();
 
-            // Step 1: challan counts. Column names taken exactly from Dashboard.aspx.vb ds2.Tables(0).Rows(0).Item(...)
             var counts = await connection.QueryAsync("sp_LogisticDashBoard", commandType: CommandType.StoredProcedure);
             if (counts.FirstOrDefault() is IDictionary<string, object?> rawRow)
             {
-                // sp_LogisticDashBoard returns the column tbl_SfFGStock TWICE: the 1st is Good Machine (MiscBin = 0) and the
-                // 2nd is Mismatch Machine (MiscBin = 1). The columns are read by position within the same name.
                 var pairs = rawRow.ToList();
 
                 string Count(string column, int occurrence = 0)
@@ -50,7 +46,6 @@ namespace MicroservicesWithKafka.Repository.Logistic
                 summary.MismatchMachine = Count("tbl_SfFGStock", 1);
             }
 
-            // Step 2: courier availability counts
             var availability = await LogisticSpRunner.RunAsync(connection, "SP_CRUD_LogisticDashboard",
                 new { Type = "courieravailability" });
             summary.CourierAvailability.AddRange(availability.Select(r => new CourierAvailabilityViewModel
@@ -58,6 +53,15 @@ namespace MicroservicesWithKafka.Repository.Logistic
                 CourierName = LogisticRowHelper.Str(r, "CourierName"),
                 Avi         = LogisticRowHelper.Int(r, "Avi")
             }));
+
+            var docketStatus = await LogisticSpRunner.RunAsync(connection, "SP_CRUD_LogisticDashboard",
+                new { Type = "docketstatus" });
+            var statusRow = docketStatus.FirstOrDefault();
+            if (statusRow != null)
+            {
+                summary.PickupAwaited = LogisticRowHelper.Int(statusRow, "PickupAwaited");
+                summary.InTransit     = LogisticRowHelper.Int(statusRow, "InTransit");
+            }
 
             return summary;
         }
