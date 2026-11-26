@@ -363,35 +363,35 @@ builder.Services.AddScoped<ILogisticUploadRepository, LogisticUploadRepository>(
 builder.Services.AddScoped<ILogisticUploadService, LogisticUploadService>();
 
 // Register Logistic Courier Service & Repository
-builder.Services.AddScoped<MicroservicesWithKafka.Repository.Logistic.ILogisticCourierRepository, MicroservicesWithKafka.Repository.Logistic.LogisticCourierRepository>();
-builder.Services.AddScoped<MicroservicesWithKafka.Services.Logistic.ILogisticCourierService, MicroservicesWithKafka.Services.Logistic.LogisticCourierService>();
+builder.Services.AddScoped<MicroservicesWithKafka.Repository.ILogisticCourierRepository, MicroservicesWithKafka.Repository.LogisticCourierRepository>();
+builder.Services.AddScoped<MicroservicesWithKafka.Services.ILogisticCourierService, MicroservicesWithKafka.Services.LogisticCourierService>();
 // Register Logistic Docket Service & Repository
-builder.Services.AddScoped<MicroservicesWithKafka.Repository.Logistic.ILogisticDocketRepository, MicroservicesWithKafka.Repository.Logistic.LogisticDocketRepository>();
-builder.Services.AddScoped<MicroservicesWithKafka.Services.Logistic.ILogisticDocketService, MicroservicesWithKafka.Services.Logistic.LogisticDocketService>();
+builder.Services.AddScoped<MicroservicesWithKafka.Repository.ILogisticDocketRepository, MicroservicesWithKafka.Repository.LogisticDocketRepository>();
+builder.Services.AddScoped<MicroservicesWithKafka.Services.ILogisticDocketService, MicroservicesWithKafka.Services.LogisticDocketService>();
 // Register Logistic Challan Service & Repository
-builder.Services.AddScoped<MicroservicesWithKafka.Repository.Logistic.ILogisticChallanRepository, MicroservicesWithKafka.Repository.Logistic.LogisticChallanRepository>();
-builder.Services.AddScoped<MicroservicesWithKafka.Services.Logistic.ILogisticChallanService, MicroservicesWithKafka.Services.Logistic.LogisticChallanService>();
+builder.Services.AddScoped<MicroservicesWithKafka.Repository.ILogisticChallanRepository, MicroservicesWithKafka.Repository.LogisticChallanRepository>();
+builder.Services.AddScoped<MicroservicesWithKafka.Services.ILogisticChallanService, MicroservicesWithKafka.Services.LogisticChallanService>();
 // Register Logistic Dashboard Service & Repository
-builder.Services.AddScoped<MicroservicesWithKafka.Repository.Logistic.ILogisticDashboardRepository, MicroservicesWithKafka.Repository.Logistic.LogisticDashboardRepository>();
-builder.Services.AddScoped<MicroservicesWithKafka.Services.Logistic.ILogisticDashboardService, MicroservicesWithKafka.Services.Logistic.LogisticDashboardService>();
+builder.Services.AddScoped<MicroservicesWithKafka.Repository.ILogisticDashboardRepository, MicroservicesWithKafka.Repository.LogisticDashboardRepository>();
+builder.Services.AddScoped<MicroservicesWithKafka.Services.ILogisticDashboardService, MicroservicesWithKafka.Services.LogisticDashboardService>();
 // Register Branch (BR) Reverse Challan Overview Service & Repository
-builder.Services.AddScoped<MicroservicesWithKafka.Repository.Logistic.IBranchReverseDashboardRepository, MicroservicesWithKafka.Repository.Logistic.BranchReverseDashboardRepository>();
-builder.Services.AddScoped<MicroservicesWithKafka.Services.Logistic.IBranchReverseDashboardService, MicroservicesWithKafka.Services.Logistic.BranchReverseDashboardService>();
+builder.Services.AddScoped<MicroservicesWithKafka.Repository.IBranchReverseDashboardRepository, MicroservicesWithKafka.Repository.BranchReverseDashboardRepository>();
+builder.Services.AddScoped<MicroservicesWithKafka.Services.IBranchReverseDashboardService, MicroservicesWithKafka.Services.BranchReverseDashboardService>();
 // Register Logistic StatusView Service & Repository
-builder.Services.AddScoped<MicroservicesWithKafka.Repository.Logistic.ILogisticStatusViewRepository, MicroservicesWithKafka.Repository.Logistic.LogisticStatusViewRepository>();
-builder.Services.AddScoped<MicroservicesWithKafka.Services.Logistic.ILogisticStatusViewService, MicroservicesWithKafka.Services.Logistic.LogisticStatusViewService>();
+builder.Services.AddScoped<MicroservicesWithKafka.Repository.ILogisticStatusViewRepository, MicroservicesWithKafka.Repository.LogisticStatusViewRepository>();
+builder.Services.AddScoped<MicroservicesWithKafka.Services.ILogisticStatusViewService, MicroservicesWithKafka.Services.LogisticStatusViewService>();
 // Register Logistic Report Service & Repository
-builder.Services.AddScoped<MicroservicesWithKafka.Repository.Logistic.ILogisticReportRepository, MicroservicesWithKafka.Repository.Logistic.LogisticReportRepository>();
-builder.Services.AddScoped<MicroservicesWithKafka.Services.Logistic.ILogisticReportService, MicroservicesWithKafka.Services.Logistic.LogisticReportService>();
+builder.Services.AddScoped<MicroservicesWithKafka.Repository.ILogisticReportRepository, MicroservicesWithKafka.Repository.LogisticReportRepository>();
+builder.Services.AddScoped<MicroservicesWithKafka.Services.ILogisticReportService, MicroservicesWithKafka.Services.LogisticReportService>();
 // Register Logistic CN Uploader Service & Repository (Logistic/CNLogisticUploader.aspx)
-builder.Services.AddScoped<MicroservicesWithKafka.Repository.Logistic.ILogisticCnRepository, MicroservicesWithKafka.Repository.Logistic.LogisticCnRepository>();
-builder.Services.AddScoped<MicroservicesWithKafka.Services.Logistic.ILogisticCnService, MicroservicesWithKafka.Services.Logistic.LogisticCnService>();
+builder.Services.AddScoped<MicroservicesWithKafka.Repository.ILogisticCnRepository, MicroservicesWithKafka.Repository.LogisticCnRepository>();
+builder.Services.AddScoped<MicroservicesWithKafka.Services.ILogisticCnService, MicroservicesWithKafka.Services.LogisticCnService>();
 // Register Logistic1 Invoice Uploaders (GST/LogisticInvoiceUploader.aspx, GST/LogisticInvoiceRateUploader.aspx)
-builder.Services.AddScoped<MicroservicesWithKafka.Repository.Logistic.ILogisticInvoiceUploadRepository, MicroservicesWithKafka.Repository.Logistic.LogisticInvoiceUploadRepository>();
-builder.Services.AddScoped<MicroservicesWithKafka.Services.Logistic.ILogisticInvoiceUploadService, MicroservicesWithKafka.Services.Logistic.LogisticInvoiceUploadService>();
+builder.Services.AddScoped<MicroservicesWithKafka.Repository.ILogisticInvoiceUploadRepository, MicroservicesWithKafka.Repository.LogisticInvoiceUploadRepository>();
+builder.Services.AddScoped<MicroservicesWithKafka.Services.ILogisticInvoiceUploadService, MicroservicesWithKafka.Services.LogisticInvoiceUploadService>();
 // Register Logistic Mobile (Mob/* pages in the Logistic menu)
-builder.Services.AddScoped<MicroservicesWithKafka.Repository.Logistic.ILogisticMobileRepository, MicroservicesWithKafka.Repository.Logistic.LogisticMobileRepository>();
-builder.Services.AddScoped<MicroservicesWithKafka.Services.Logistic.ILogisticMobileService, MicroservicesWithKafka.Services.Logistic.LogisticMobileService>();
+builder.Services.AddScoped<MicroservicesWithKafka.Repository.ILogisticMobileRepository, MicroservicesWithKafka.Repository.LogisticMobileRepository>();
+builder.Services.AddScoped<MicroservicesWithKafka.Services.ILogisticMobileService, MicroservicesWithKafka.Services.LogisticMobileService>();
 
 // faizan finance claim count service
 //builder.Services.AddScoped<IFinanceClaimCountRepository, FinanceClaimCountRepository>();
