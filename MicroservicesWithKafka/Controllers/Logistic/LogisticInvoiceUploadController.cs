@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 namespace MicroservicesWithKafka.Controllers.Logistic
 {
     [Authorize(Roles = "Logistic1")]
-    [Route("api/logistic/invoice-uploads")]
+    [Route("api/[controller]")]
     [ApiController]
     public class LogisticInvoiceUploadController : ControllerBase
     {

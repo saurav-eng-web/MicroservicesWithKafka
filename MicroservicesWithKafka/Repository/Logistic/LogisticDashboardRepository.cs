@@ -61,9 +61,30 @@ namespace MicroservicesWithKafka.Repository.Logistic
             {
                 summary.PickupAwaited = LogisticRowHelper.Int(statusRow, "PickupAwaited");
                 summary.InTransit     = LogisticRowHelper.Int(statusRow, "InTransit");
+                summary.Delivered     = LogisticRowHelper.Int(statusRow, "Delivered");
+                summary.ChallanToBeCancel = LogisticRowHelper.Int(statusRow, "ChallanToBeCancel");
             }
 
             return summary;
+        }
+
+        public async Task<IEnumerable<DashboardDetailViewModel>> GetDashboardDetailsAsync(string bucket)
+        {
+            using var connection = _sqlConnectionService.GetConnection();
+            var rows = await LogisticSpRunner.RunAsync(connection, "SP_CRUD_LogisticDashboard",
+                new { Type = "details", Bucket = bucket });
+
+            return rows.Select(r => new DashboardDetailViewModel
+            {
+                SourceType    = LogisticRowHelper.Str(r, "SourceType"),
+                ChallanNo     = LogisticRowHelper.Str(r, "ChallanNo"),
+                NspName       = LogisticRowHelper.Str(r, "NspName"),
+                AscCode       = LogisticRowHelper.Str(r, "AscCode"),
+                PickupBoy     = LogisticRowHelper.Str(r, "PickupBoy"),
+                PickupMobile  = LogisticRowHelper.Str(r, "PickupMobile"),
+                ChallanStatus = LogisticRowHelper.Str(r, "ChallanStatus"),
+                DocketStatus  = LogisticRowHelper.Str(r, "DocketStatus")
+            }).ToList();
         }
     }
 }

@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 namespace MicroservicesWithKafka.Controllers.Logistic
 {
     [Authorize(Policy = "LogisticPolicy")]
-    [Route("api/logistic/challans")]
+    [Route("api/[controller]")]
     [ApiController]
     public class LogisticChallanController : ControllerBase
     {

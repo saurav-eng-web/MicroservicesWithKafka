@@ -11,7 +11,7 @@ using System.Threading.Tasks;
 namespace MicroservicesWithKafka.Controllers.Logistic
 {
     [Authorize(Policy = "LogisticPolicy")]
-    [Route("api/logistic/mobile")]
+    [Route("api/[controller]")]
     [ApiController]
     public class LogisticMobileController : ControllerBase
     {
