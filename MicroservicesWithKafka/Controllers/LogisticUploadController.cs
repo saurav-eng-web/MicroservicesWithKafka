@@ -2,9 +2,9 @@ using MicroservicesWithKafka.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-[Authorize]
+[Authorize(Policy = "LogisticPolicy")]
 [ApiController]
-[Route("api/LogisticUpload")]
+[Route("api/[controller]")]
 public class LogisticUploadController : ControllerBase
 {
     private readonly ILogisticUploadService _service;

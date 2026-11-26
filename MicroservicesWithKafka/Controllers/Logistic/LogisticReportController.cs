@@ -12,7 +12,7 @@ using ClosedXML.Excel;
 namespace MicroservicesWithKafka.Controllers.Logistic
 {
     [Authorize(Policy = "LogisticPolicy")]
-    [Route("api/logistic/reports")]
+    [Route("api/[controller]")]
     [ApiController]
     public class LogisticReportController : ControllerBase
     {

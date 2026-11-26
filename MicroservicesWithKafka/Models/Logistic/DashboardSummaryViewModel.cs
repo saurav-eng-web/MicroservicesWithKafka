@@ -12,6 +12,8 @@ namespace MicroservicesWithKafka.Models.Logistic
         public string? MismatchMachine { get; set; }
         public int PickupAwaited { get; set; }
         public int InTransit { get; set; }
+        public int Delivered { get; set; }
+        public int ChallanToBeCancel { get; set; }
         public List<CourierAvailabilityViewModel> CourierAvailability { get; set; } = new List<CourierAvailabilityViewModel>();
     }
 }
