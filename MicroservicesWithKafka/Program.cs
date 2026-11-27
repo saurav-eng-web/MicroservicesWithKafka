@@ -520,7 +520,7 @@ builder.Services.AddAuthorization(options =>
             "HO", "BR", "SF/SSD", "CC", "HOuser", "ASM", "ZONE", "BSM", "Customer",
             "Logistic", "NWH", "GSTTeam", "ECom", "HOuser1", "Logistic1", "Reliance",
             "Engineer", "TechnicalExe", "NWHExe", "ASCM", "ASMM", "NWHM", "HOM",
-            "FINANCEM", "Finance"
+            "FINANCEM", "Finance", "Dock"
         ));  
     // INDIVIDUAL ROLE POLICIES (for restricted access)
     options.AddPolicy("SFSSDPolicy", policy =>
@@ -542,7 +542,7 @@ builder.Services.AddAuthorization(options =>
         policy.RequireRole("ASM", "ASCM", "ASMM"));
     // Logistic Group
     options.AddPolicy("LogisticPolicy", policy =>
-        policy.RequireRole("Logistic", "Logistic1", "NWH", "NWHExe", "NWHM"));
+        policy.RequireRole("Logistic", "Logistic1", "NWH", "NWHExe", "NWHM","Dock"));
     // Customer Group
     options.AddPolicy("CustomerPolicy", policy =>
         policy.RequireRole("Customer", "Reliance", "ECom"));
