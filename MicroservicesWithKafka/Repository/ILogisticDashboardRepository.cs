@@ -7,6 +7,6 @@ namespace MicroservicesWithKafka.Repository
     public interface ILogisticDashboardRepository
     {
         Task<DashboardSummaryViewModel> GetDashboardSummaryAsync();
-        Task<IEnumerable<DashboardDetailViewModel>> GetDashboardDetailsAsync(string bucket);
+        Task<IEnumerable<Dictionary<string, string>>> GetDashboardDetailsAsync(string bucket);
     }
 }

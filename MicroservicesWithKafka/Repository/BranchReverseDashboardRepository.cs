@@ -36,23 +36,13 @@ namespace MicroservicesWithKafka.Repository
             return summary;
         }
 
-        public async Task<IEnumerable<DashboardDetailViewModel>> GetDetailsAsync(int branchId, string bucket)
+        public async Task<IEnumerable<Dictionary<string, string>>> GetDetailsAsync(int branchId, string bucket)
         {
             using var connection = _sqlConnectionService.GetConnection();
             var rows = await LogisticSpRunner.RunAsync(connection, SpName,
                 new { Type = "details", Bucket = bucket, BranchId = branchId });
 
-            return rows.Select(r => new DashboardDetailViewModel
-            {
-                SourceType    = LogisticRowHelper.Str(r, "SourceType"),
-                ChallanNo     = LogisticRowHelper.Str(r, "ChallanNo"),
-                NspName       = LogisticRowHelper.Str(r, "NspName"),
-                AscCode       = LogisticRowHelper.Str(r, "AscCode"),
-                PickupBoy     = LogisticRowHelper.Str(r, "PickupBoy"),
-                PickupMobile  = LogisticRowHelper.Str(r, "PickupMobile"),
-                ChallanStatus = LogisticRowHelper.Str(r, "ChallanStatus"),
-                DocketStatus  = LogisticRowHelper.Str(r, "DocketStatus")
-            }).ToList();
+            return LogisticRowHelper.ToTable(rows);
         }
     }
 }

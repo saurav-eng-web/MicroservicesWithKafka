@@ -7,6 +7,6 @@ namespace MicroservicesWithKafka.Repository
     public interface IBranchReverseDashboardRepository
     {
         Task<BranchReverseSummaryViewModel> GetSummaryAsync(int branchId);
-        Task<IEnumerable<DashboardDetailViewModel>> GetDetailsAsync(int branchId, string bucket);
+        Task<IEnumerable<Dictionary<string, string>>> GetDetailsAsync(int branchId, string bucket);
     }
 }
