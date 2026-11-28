@@ -1,3 +1,4 @@
+using MicroservicesWithKafka.Models;
 using MicroservicesWithKafka.Repository;
 using System;
 using System.Threading.Tasks;
@@ -16,7 +17,7 @@ namespace MicroservicesWithKafka.Services
             _repository = repository;
         }
 
-        public async Task<(object? Data, int StatusCode, string StatusMsg)> ProcessAsync(object payload, int branchId)
+        public async Task<(object? Data, int StatusCode, string StatusMsg)> ProcessAsync(object payload, DashboardScope scope)
         {
             var json = LogisticPayload.Parse(payload);
             var type = LogisticPayload.RequireType(json, "summary", "details");
@@ -27,11 +28,11 @@ namespace MicroservicesWithKafka.Services
                 if (Array.IndexOf(Buckets, bucket) < 0)
                     throw new ArgumentException("bucket must be one of " + string.Join(", ", Buckets) + ".");
 
-                var rows = await _repository.GetDetailsAsync(branchId, bucket);
+                var rows = await _repository.GetDetailsAsync(scope, bucket);
                 return (rows, 200, "Record found Successfully");
             }
 
-            var data = await _repository.GetSummaryAsync(branchId);
+            var data = await _repository.GetSummaryAsync(scope);
             return (data, 200, "Record found Successfully");
         }
     }

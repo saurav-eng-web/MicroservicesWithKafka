@@ -17,11 +17,11 @@ namespace MicroservicesWithKafka.Repository
             _sqlConnectionService = sqlConnectionService;
         }
 
-        public async Task<BranchReverseSummaryViewModel> GetSummaryAsync(int branchId)
+        public async Task<BranchReverseSummaryViewModel> GetSummaryAsync(DashboardScope scope)
         {
             using var connection = _sqlConnectionService.GetConnection();
             var rows = await LogisticSpRunner.RunAsync(connection, SpName,
-                new { Type = "docketstatus", BranchId = branchId });
+                new { Type = "docketstatus", scope.BranchId, scope.SfId });
 
             var summary = new BranchReverseSummaryViewModel();
             var row = rows.FirstOrDefault();
@@ -36,11 +36,11 @@ namespace MicroservicesWithKafka.Repository
             return summary;
         }
 
-        public async Task<IEnumerable<Dictionary<string, string>>> GetDetailsAsync(int branchId, string bucket)
+        public async Task<IEnumerable<Dictionary<string, string>>> GetDetailsAsync(DashboardScope scope, string bucket)
         {
             using var connection = _sqlConnectionService.GetConnection();
             var rows = await LogisticSpRunner.RunAsync(connection, SpName,
-                new { Type = "details", Bucket = bucket, BranchId = branchId });
+                new { Type = "details", Bucket = bucket, scope.BranchId, scope.SfId });
 
             return LogisticRowHelper.ToTable(rows);
         }
