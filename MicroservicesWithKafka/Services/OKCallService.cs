@@ -49,7 +49,9 @@ namespace MicroservicesWithKafka.Services
                 var updated = await UpdateComplaintsFromPOAsync(data);
 
                 // Added by Saurav on dt: 21-Nov-2026 - "Call OK" SMS (ported from the old WebForms JobsheetUpdate page, source "Call OK")
-                await SendCallOkSmsAsync(data, updated);
+                // Modified by Saurav on dt: 28-Nov-2026 - "Call OK" SMS temporarily disabled: message template is under discussion
+                // (DLT delivery report: HEADER_NOT_REGISTERED_FOR_TEMP). To enable again, just uncomment the line below.
+                //await SendCallOkSmsAsync(data, updated);
             }
 
 
