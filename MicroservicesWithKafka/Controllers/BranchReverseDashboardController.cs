@@ -1,3 +1,4 @@
+using MicroservicesWithKafka.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MicroservicesWithKafka.Services;
@@ -30,7 +31,7 @@ namespace MicroservicesWithKafka.Controllers
                 if (!int.TryParse(User.FindFirst("Branch_ID")?.Value, out var branchId) || branchId <= 0)
                     return StatusCode(403, LogisticResponse.Build(403, "No branch is mapped to this user.", null));
 
-                var (data, code, msg) = await _service.ProcessAsync(payload, branchId);
+                var (data, code, msg) = await _service.ProcessAsync(payload, DashboardScope.ForBranch(branchId));
                 return StatusCode(code, LogisticResponse.Build(code, msg, data));
             }
             catch (ArgumentException ex)

@@ -380,6 +380,9 @@ builder.Services.AddScoped<MicroservicesWithKafka.Services.IBranchReverseDashboa
 // Register Logistic Forward Challan/Docket Dashboard Service & Repository
 builder.Services.AddScoped<MicroservicesWithKafka.Repository.ILogisticForwardDashboardRepository, MicroservicesWithKafka.Repository.LogisticForwardDashboardRepository>();
 builder.Services.AddScoped<MicroservicesWithKafka.Services.ILogisticForwardDashboardService, MicroservicesWithKafka.Services.LogisticForwardDashboardService>();
+// Register Branch (BR) Forward Challan/Docket Service & Repository
+builder.Services.AddScoped<MicroservicesWithKafka.Repository.IBranchForwardDashboardRepository, MicroservicesWithKafka.Repository.BranchForwardDashboardRepository>();
+builder.Services.AddScoped<MicroservicesWithKafka.Services.IBranchForwardDashboardService, MicroservicesWithKafka.Services.BranchForwardDashboardService>();
 // Register Logistic StatusView Service & Repository
 builder.Services.AddScoped<MicroservicesWithKafka.Repository.ILogisticStatusViewRepository, MicroservicesWithKafka.Repository.LogisticStatusViewRepository>();
 builder.Services.AddScoped<MicroservicesWithKafka.Services.ILogisticStatusViewService, MicroservicesWithKafka.Services.LogisticStatusViewService>();
